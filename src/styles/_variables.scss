@@ -1,0 +1,26 @@
+// Axis colors, matched to the classic ikigai Venn (seed image). Saturation
+// lifted a touch from the first build so the regions read crisp, not muddy.
+$c-love:  #f2a93b; // What you love        (top) — also the global accent
+$c-good:  #7b92d6; // What you're good at   (left)
+$c-world: #62cb8c; // What the world needs  (right)
+$c-paid:  #ec7681; // What you can be paid for (bottom)
+$c-ikigai: #2f2f33; // center
+
+$bg:        #101016;
+$panel:     #16161f;
+$panel-2:   #1f1f2b;
+$ink:       #eef0f6;
+$ink-dim:   #9aa0b0;
+$ink-mute:  #6c7080; // tertiary: instrument footers, ghost hints
+$line:      #2a2a38;
+$accent:    #f2a93b;
+
+$radius: 10px;
+$gap: 16px;
+
+// Typography — real typefaces, not system-ui. Space Grotesk for display/brand
+// and the map; Figtree for body/UI; JetBrains Mono ONLY for instrument numerals
+// and the discreet axis cluster (the "flight instrument" voice).
+$font-display: 'Space Grotesk Variable', system-ui, sans-serif;
+$font-body: 'Figtree Variable', system-ui, sans-serif;
+$font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
