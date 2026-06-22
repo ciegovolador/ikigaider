@@ -15,7 +15,7 @@ body {
 
 h1, h2, h3, strong { font-family: $font-display; }
 
-button {
+button, .button {
   font: inherit;
   color: $ink;
   background: $panel-2;
@@ -31,6 +31,12 @@ button {
   &.primary { background: $accent; border-color: $accent; color: #1a1208; font-weight: 700; }
   &.primary:hover { filter: brightness(1.08); border-color: $accent; }
 }
+
+// Anchor-as-button (e.g. the skill download link): the box styling comes from
+// the shared rule above; these make an <a> sit like a real button — centred
+// content via flex and no underline. Scoped to .button so real <button>s keep
+// their default inline-block layout.
+a.button { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 
 :focus-visible { outline: 2px solid $accent; outline-offset: 2px; }
 
