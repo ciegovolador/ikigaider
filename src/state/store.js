@@ -7,8 +7,13 @@ import { saveDbBytes, loadDbBytes } from '../db/persist.js';
 import { decideMove, bestActivity, uncertainty } from '../lib/policy.js';
 import { assess, coach } from '../lib/llm.js';
 import { ingest as orchIngest, runTurn as orchRunTurn } from '../lib/orchestrator.js';
-import { onLoadProgress } from '../lib/webllm.js';
+import { onLoadProgress, DEFAULT_BROWSER_MODEL, DEFAULT_BROWSER_BASE } from '../lib/webllm.js';
 import { placementDraft } from '../i18n/index.js';
+
+// A fresh user (or an imported journey, whose config was stripped on export)
+// defaults to the zero-setup in-browser engine — WebGPU if available, else the
+// CPU fallback. No endpoint, no key: send a message and it just coaches.
+const DEFAULT_CONFIG = { base_url: DEFAULT_BROWSER_BASE, api_key: '', model: DEFAULT_BROWSER_MODEL };
 
 // `t` and `locale` come from the LocaleProvider; default to identity/en so the
 // hook still works in tests or outside a provider.
@@ -63,7 +68,7 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
       try {
         const cached = loadDbBytes();
         dbRef.current = await initBrowserDb(cached || undefined);
-        setConfig(dbRef.current.getConfig() || { base_url: '', api_key: '', model: '' });
+        setConfig(dbRef.current.getConfig() || DEFAULT_CONFIG);
         hydrate(refresh());
         setReady(true);
       } catch (e) {
@@ -91,7 +96,7 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
 
   const importBytes = useCallback(async (bytes, note) => {
     dbRef.current = await initBrowserDb(new Uint8Array(bytes));
-    setConfig(dbRef.current.getConfig() || { base_url: '', api_key: '', model: '' });
+    setConfig(dbRef.current.getConfig() || DEFAULT_CONFIG);
     hydrate(refresh());
     setMessages([{ role: 'coach', text: note || t('coach.imported') }]);
     persist();
