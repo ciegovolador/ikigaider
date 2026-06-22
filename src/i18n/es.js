@@ -103,10 +103,12 @@ export default {
   'config.journey.note': 'Exporta cuando quieras, vuelve a conectar el archivo en cualquier equipo.',
   'config.language': 'Idioma',
 
-  // descarga de la skill (avanzado: mismo motor, en tu terminal)
-  'config.skill': 'Usar en Claude Code',
+  // puertas de origen del modelo (un motor, tres puertas; Claude Code ya disponible)
+  'config.doors': 'Otras formas de usar ikigaider',
+  'config.doors.soon': 'pronto',
+  'config.door.selfhost': 'Autoalojado',
   'config.skill.get': 'Descargar skill',
-  'config.skill.note': 'El mismo motor, en tu terminal — tu propio modelo te orienta, sin clave ni descarga. Descomprime en ~/.claude/skills/ y ejecuta /ikigaider.',
+  'config.skill.note': 'El mismo motor, en tu terminal — tu propio modelo te orienta, sin clave. Descomprime en ~/.claude/skills/ y ejecuta /ikigaider.',
 
   'app.loading': 'Cargando…',
   'app.initFailed': 'Fallo al iniciar: {msg}',

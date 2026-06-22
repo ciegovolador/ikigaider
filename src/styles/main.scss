@@ -223,6 +223,21 @@ input, textarea {
     border-radius: 8px; padding: 8px 10px; width: 100%; }
   .webgpu { font-size: 11.5px; &.ok { color: $c-world; } &.no { color: $c-paid; } } }
 
+/* Model-source front doors inside config: a quiet list of ways to run the same
+   engine, not a banner. Marker (▸) reads as a doorway; "soon" doors are muted
+   and inert so the panel teaches "one engine, three doors" without selling. */
+.doors {
+  display: flex; flex-direction: column; gap: 12px;
+  .door-name { font-family: $font-display; color: $ink;
+    &::before { content: '▸'; color: $ink-mute; margin-right: 7px; } }
+  .door-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .door-note { font-size: 12px; margin-top: 4px; display: block; }
+  .door-soon { display: flex; align-items: center; justify-content: space-between;
+    .door-name { color: $ink-mute; }
+    .door-tag { font-family: $font-mono; font-size: 10.5px; letter-spacing: 0.1em;
+      text-transform: uppercase; color: $ink-mute; } }
+}
+
 /* ---- responsive: single column under 760px ---------------------------- */
 // On mobile the two panes stack, so the viewport cap is dropped and the page
 // scrolls normally (the desktop internal-scroll model doesn't fit one column).

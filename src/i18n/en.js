@@ -115,10 +115,12 @@ export default {
   'config.journey.note': 'Export anytime, plug the file back in on any machine.',
   'config.language': 'Language',
 
-  // skill download (advanced: same engine, in your terminal)
-  'config.skill': 'Use in Claude Code',
+  // model-source front doors (one engine, three doors; Claude Code ships now)
+  'config.doors': 'Other ways to run ikigaider',
+  'config.doors.soon': 'soon',
+  'config.door.selfhost': 'Self-host',
   'config.skill.get': 'Download skill',
-  'config.skill.note': 'Same engine, in your terminal — your own model coaches, no key, no download. Unzip into ~/.claude/skills/ and run /ikigaider.',
+  'config.skill.note': 'Same engine, in your terminal — your own model coaches, no key. Unzip into ~/.claude/skills/ and run /ikigaider.',
 
   // misc
   'app.loading': 'Loading…',

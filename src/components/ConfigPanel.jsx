@@ -125,14 +125,30 @@ export default function ConfigPanel({
         </div>
         <span className="muted">{t('config.journey.note')}</span>
 
-        <hr style={{ borderColor: 'var(--line, #2a2a38)', width: '100%' }} />
-        <strong>{t('config.skill')}</strong>
-        <div className="row">
-          <a className="button" href={`${import.meta.env.BASE_URL}ikigaider-skill.zip`} download>
-            {t('config.skill.get')}
-          </a>
+        <hr />
+        {/* One engine, three model-source front doors. The skill (Claude Code)
+            ships now; MCP + self-host are named but disabled so the panel
+            teaches the platform story instead of burying the skill as a row. */}
+        <strong>{t('config.doors')}</strong>
+        <div className="doors">
+          <div className="door">
+            <div className="door-head">
+              <span className="door-name">Claude Code</span>
+              <a className="button" href={`${import.meta.env.BASE_URL}ikigaider-skill.zip`} download>
+                {t('config.skill.get')}
+              </a>
+            </div>
+            <span className="muted door-note">{t('config.skill.note')}</span>
+          </div>
+          <div className="door door-soon">
+            <span className="door-name">MCP server</span>
+            <span className="door-tag">{t('config.doors.soon')}</span>
+          </div>
+          <div className="door door-soon">
+            <span className="door-name">{t('config.door.selfhost')}</span>
+            <span className="door-tag">{t('config.doors.soon')}</span>
+          </div>
         </div>
-        <span className="muted">{t('config.skill.note')}</span>
       </div>
     </div>
   );
