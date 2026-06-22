@@ -115,6 +115,11 @@ export default {
   'config.journey.note': 'Export anytime, plug the file back in on any machine.',
   'config.language': 'Language',
 
+  // skill download (advanced: same engine, in your terminal)
+  'config.skill': 'Use in Claude Code',
+  'config.skill.get': 'Download skill',
+  'config.skill.note': 'Same engine, in your terminal — your own model coaches, no key, no download. Unzip into ~/.claude/skills/ and run /ikigaider.',
+
   // misc
   'app.loading': 'Loading…',
   'app.initFailed': 'Init failed: {msg}',

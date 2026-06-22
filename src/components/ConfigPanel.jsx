@@ -124,6 +124,15 @@ export default function ConfigPanel({
             onChange={(e) => e.target.files[0] && (onImport(e.target.files[0]), onClose())} />
         </div>
         <span className="muted">{t('config.journey.note')}</span>
+
+        <hr style={{ borderColor: 'var(--line, #2a2a38)', width: '100%' }} />
+        <strong>{t('config.skill')}</strong>
+        <div className="row">
+          <a className="button" href={`${import.meta.env.BASE_URL}ikigaider-skill.zip`} download>
+            {t('config.skill.get')}
+          </a>
+        </div>
+        <span className="muted">{t('config.skill.note')}</span>
       </div>
     </div>
   );

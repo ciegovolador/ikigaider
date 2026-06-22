@@ -1,0 +1,10 @@
+{
+  "name": "ikigaider-skill",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "ikigaider's Claude Code door — the harness agent is the model; one portable journey.sqlite shared with ikigaider.com.",
+  "engines": {
+    "node": ">=18"
+  }
+}

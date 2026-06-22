@@ -30,6 +30,70 @@ CREATE TABLE IF NOT EXISTS moves (
 );
 `;
 
+// --- schema versioning (Postel: liberal accept, conservative produce) --------
+// The journey.sqlite file is portable across the web app and the downloaded
+// skill, which version independently. We stamp PRAGMA user_version = MAJOR*1000
+// + MINOR so any context can tell what wrote a file:
+//   • unmarked file (user_version 0, everything exported before versioning) =
+//     the v1.0 baseline; we apply forward migrations then stamp it.
+//   • same MAJOR, newer MINOR  -> READ as-is (additive columns we don't know are
+//     ignored). We do NOT rewrite its version — never produce a shape an even
+//     newer reader didn't expect. (don't-break-userspace; additive = soft fork)
+//   • same MAJOR, older MINOR  -> run forward migrations, then stamp current.
+//   • newer MAJOR              -> REFUSE (a breaking change); never corrupt it.
+// The migration LADDER is deliberately empty until a real v1.1 schema change —
+// the framework is here; the process is deferred (CRAN-style deprecation when
+// it lands).
+const SCHEMA_MAJOR = 1;
+const SCHEMA_MINOR = 0;
+const SCHEMA_UV = SCHEMA_MAJOR * 1000 + SCHEMA_MINOR;
+
+// Forward-only migrations within the current MAJOR. Key = target MINOR; each
+// upgrades from (key-1) to key. Empty by design until the first additive change.
+const MIGRATIONS = {
+  // 1: (db) => db.run('ALTER TABLE scores ADD COLUMN note TEXT'),
+};
+
+function readUserVersion(db) {
+  const r = db.exec('PRAGMA user_version');
+  return r.length && r[0].values.length ? Number(r[0].values[0][0]) : 0;
+}
+function setUserVersion(db, n) {
+  // PRAGMA can't be parameterised; Number() guards against injection.
+  db.run(`PRAGMA user_version = ${Number(n)}`);
+}
+function runMigrations(db, fromMinor) {
+  for (let m = fromMinor + 1; m <= SCHEMA_MINOR; m++) {
+    if (MIGRATIONS[m]) MIGRATIONS[m](db);
+  }
+}
+
+// Reconcile an opened DB's version with this build. Throws on a newer MAJOR.
+function migrate(db) {
+  const uv = readUserVersion(db);
+  if (uv === 0) {
+    // Pre-versioning file IS the v1.0 baseline schema.
+    runMigrations(db, 0);
+    setUserVersion(db, SCHEMA_UV);
+    return;
+  }
+  const fileMajor = Math.floor(uv / 1000);
+  const fileMinor = uv % 1000;
+  if (fileMajor > SCHEMA_MAJOR) {
+    throw new Error(
+      `This journey was written by a newer ikigaider (v${fileMajor}.x). ` +
+      `Update the app or skill to open it.`
+    );
+  }
+  if (fileMajor < SCHEMA_MAJOR) {
+    // No major migration defined yet (current MAJOR is 1; only uv 0 is below).
+    throw new Error(`Unsupported journey version v${fileMajor}.${fileMinor}.`);
+  }
+  if (fileMinor > SCHEMA_MINOR) return; // liberal accept: read newer-minor as-is
+  runMigrations(db, fileMinor);
+  if (fileMinor < SCHEMA_MINOR) setUserVersion(db, SCHEMA_UV);
+}
+
 const uid = () =>
   (globalThis.crypto?.randomUUID?.() ?? `a_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
 
@@ -47,8 +111,12 @@ function rows(db, sql, params = []) {
 class IkigaiStore {
   constructor(db) {
     this.db = db;
-    db.run(SCHEMA);
+    db.run(SCHEMA);   // CREATE TABLE IF NOT EXISTS — safe on fresh and existing files
+    migrate(db);      // then reconcile the version (stamp / upgrade / refuse)
   }
+
+  // Current schema version of the open file (MAJOR*1000 + MINOR). Diagnostics + tests.
+  userVersion() { return readUserVersion(this.db); }
 
   // --- config ---
   getConfig() {
@@ -110,7 +178,19 @@ class IkigaiStore {
   }
 
   // --- portable file ---
-  export() { return this.db.export(); } // Uint8Array
+  export() { return this.db.export(); } // Uint8Array (full — used for the local reload cache)
+
+  // Portable export for HANDOFF (download / skill): strips the config table so a
+  // shared journey never carries the user's API key or endpoint. sql.js is
+  // synchronous and single-threaded, so the delete→export→restore runs with no
+  // interruption window — the live config is intact after the call.
+  exportSanitized() {
+    const cfg = this.getConfig();
+    this.db.run('DELETE FROM config');
+    const bytes = this.db.export();
+    if (cfg) this.setConfig(cfg);
+    return bytes;
+  }
 }
 
 export function createDb(SQL, bytes) {

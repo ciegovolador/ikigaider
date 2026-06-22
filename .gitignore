@@ -10,6 +10,11 @@ build/
 .next/
 out/
 
+# Generated skill bundle (mechanically derived from src by `npm run build:skill`;
+# the authored cli.mjs/db.mjs/SKILL.md/package.json ARE tracked).
+ikigaider-skill/engine/
+public/ikigaider-skill.zip
+
 # Environment
 .env
 .env.local

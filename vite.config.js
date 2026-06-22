@@ -12,6 +12,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.js'],
+    // src/* = web engine + UI; ikigaider-skill/* = the bundled skill (its tests
+    // are .mjs and excluded from the download zip).
+    include: ['src/**/*.test.js', 'ikigaider-skill/**/*.test.mjs'],
   },
 });

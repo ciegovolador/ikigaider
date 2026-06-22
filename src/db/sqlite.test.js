@@ -56,3 +56,58 @@ describe('IkigaiStore', () => {
     expect(restored.listMoves()[0].submode).toBe('keep');
   });
 });
+
+describe('schema versioning (Postel)', () => {
+  // Craft a file at a chosen user_version: build it, force the pragma AFTER
+  // construction (so migrate() doesn't re-stamp), then export the bytes.
+  const fileAtVersion = (uv, seed) => {
+    const db = createDb(SQL);
+    if (seed) seed(db);
+    db.db.run(`PRAGMA user_version = ${uv}`);
+    return db.export();
+  };
+
+  it('stamps a fresh db with the current schema version', () => {
+    const db = createDb(SQL);
+    expect(db.userVersion()).toBe(1000); // MAJOR 1 * 1000 + MINOR 0
+  });
+
+  it('stamps an unmarked (pre-versioning) file as the v1.0 baseline', () => {
+    // demo.sqlite and every already-exported journey read user_version 0.
+    const bytes = fileAtVersion(0, (db) => db.addActivity('legacy'));
+    const restored = createDb(SQL, bytes);
+    expect(restored.userVersion()).toBe(1000);
+    expect(restored.listActivities()[0].name).toBe('legacy');
+  });
+
+  it('reads a newer-MINOR file as-is without rewriting its version (liberal accept)', () => {
+    const bytes = fileAtVersion(1001, (db) => db.addActivity('from v1.1'));
+    const restored = createDb(SQL, bytes);
+    expect(restored.userVersion()).toBe(1001); // left untouched (conservative produce)
+    expect(restored.listActivities()[0].name).toBe('from v1.1');
+  });
+
+  it('refuses a newer-MAJOR file instead of corrupting it', () => {
+    const bytes = fileAtVersion(2000, (db) => db.addActivity('from v2'));
+    expect(() => createDb(SQL, bytes)).toThrow(/newer ikigaider \(v2\.x\)/);
+  });
+});
+
+describe('exportSanitized — no secrets travel (outside-voice fix)', () => {
+  it('strips config from the exported file but keeps the journey', () => {
+    const db = createDb(SQL);
+    db.setConfig({ base_url: 'http://secret', api_key: 'sk-LEAK', model: 'm' });
+    const id = db.addActivity('craft');
+    db.addScore(id, makeScores({ love: 0.9 }));
+
+    const restored = createDb(SQL, db.exportSanitized());
+    expect(restored.getConfig()).toBeNull();            // no api_key/base_url travels
+    expect(restored.listActivities()[0].name).toBe('craft'); // journey intact
+  });
+  it('leaves the live config intact after a sanitized export', () => {
+    const db = createDb(SQL);
+    db.setConfig({ base_url: 'u', api_key: 'k', model: 'm' });
+    db.exportSanitized();
+    expect(db.getConfig().model).toBe('m'); // restored in place
+  });
+});

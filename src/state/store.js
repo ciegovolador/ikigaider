@@ -4,14 +4,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { initBrowserDb } from '../db/sqlite-browser.js';
 import { saveDbBytes, loadDbBytes } from '../db/persist.js';
-import { makeScores } from '../lib/ikigai.js';
 import { decideMove, bestActivity, uncertainty } from '../lib/policy.js';
 import { assess, coach } from '../lib/llm.js';
+import { ingest as orchIngest, runTurn as orchRunTurn } from '../lib/orchestrator.js';
 import { onLoadProgress } from '../lib/webllm.js';
 import { placementDraft } from '../i18n/index.js';
-
-const findByName = (portfolio, name) =>
-  portfolio.find((a) => a.name.toLowerCase() === String(name).toLowerCase());
 
 // `t` and `locale` come from the LocaleProvider; default to identity/en so the
 // hook still works in tests or outside a provider.
@@ -82,7 +79,8 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   }, [persist]);
 
   const exportDb = useCallback(() => {
-    const blob = new Blob([dbRef.current.export()], { type: 'application/octet-stream' });
+    // Sanitized: the downloaded journey never carries the API key/endpoint.
+    const blob = new Blob([dbRef.current.exportSanitized()], { type: 'application/octet-stream' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     // Explicit, dated name so exports are recognisable and don't overwrite.
@@ -111,59 +109,37 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
 
   const say = (role, text, mv) => setMessages((m) => [...m, { role, text, move: mv }]);
 
-  // Apply an LLM assess/coach payload to the DB; return ids of created activities.
-  const applyPayload = useCallback((payload) => {
-    const db = dbRef.current;
-    const created = [];
-    const list = db.listActivities();
-    for (const u of payload.updates || []) {
-      const a = findByName(list, u.name);
-      if (a) db.addScore(a.id, makeScores(u.scores), u.conf || {}, 'coach');
-    }
-    for (const c of [...(payload.activities || []), ...(payload.created || [])]) {
-      const id = db.addActivity(c.name);
-      db.addScore(id, makeScores(c.scores), c.conf || {}, 'assess');
-      created.push(id);
-    }
-    return created;
+  // Push a coach turn's result (from the pure orchestrator) into React state.
+  const applyTurn = useCallback((turn) => {
+    setPortfolio(turn.portfolio);
+    say('coach', turn.message, turn.executedMove);
+    setGlide(turn.glide);
+    setFocalId(turn.focalId);
+    setMove(turn.nextMove);
   }, []);
 
-  // Execute the current move via the LLM, apply results, then decide the next move.
+  // Execute the current move, apply results, decide the next. The product logic
+  // lives in orchestrator.runTurn (shared with the skill); the hook only injects
+  // coach() and writes the returned delta into React state.
   const runTurn = useCallback(async (userText, executeMove, prevFocalId) => {
-    const db = dbRef.current;
-    const focal = db.listActivities().find((a) => a.id === prevFocalId) || null;
-    const payload = await coach(config, {
-      move: executeMove, focal, portfolio: refresh(), userText, locale,
+    const turn = await orchRunTurn(dbRef.current, coach, {
+      config, userText, executeMove, prevFocalId, locale,
     });
-    const createdIds = applyPayload(payload);
-    const list = refresh();
-    say('coach', payload.message || '(no message)', executeMove);
-
-    // Focal after executing the move: explore that created an activity = teleport.
-    let newFocal = prevFocalId;
-    if (executeMove.mode === 'explore' && createdIds.length) newFocal = createdIds[0];
-    else if (executeMove.focusId) newFocal = executeMove.focusId;
-    setGlide(newFocal === prevFocalId);
-    setFocalId(newFocal);
-
-    setMove(decideMove(list, newFocal));
-  }, [config, refresh, applyPayload]);
+    applyTurn(turn);
+  }, [config, locale, applyTurn]);
 
   // Assess free text into activities and either place the best one (+ first
   // coach turn) or, if nothing concrete surfaced, ask for more (interview).
   const ingest = useCallback(async (text) => {
-    const payload = await assess(config, text);
-    applyPayload(payload);
-    const list = refresh();
-    const best = bestActivity(list);
     setGlide(false);
-    if (best) {
-      setFocalId(best.id);
-      await runTurn('', decideMove(list, best.id), best.id);
+    const r = await orchIngest(dbRef.current, { assess, coach }, { config, text, locale });
+    if (r.kind === 'placed') {
+      applyTurn(r.turn);
     } else {
+      setPortfolio(r.portfolio);
       say('coach', t('coach.interview'));
     }
-  }, [config, applyPayload, refresh, runTurn, t]);
+  }, [config, locale, applyTurn, t]);
 
   const start = useCallback(async (text) => {
     setBusy(true);
