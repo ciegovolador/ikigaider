@@ -52,6 +52,11 @@ export function onLoadProgress(cb) { progressCb = cb; }
 // --- WebGPU path: WebLLM ----------------------------------------------------
 let enginePromise = null;
 let loadedModel = null;
+// `navigator.gpu` can exist without a usable adapter (headless browsers, a
+// disabled/blocklisted GPU, partial Firefox support). Once WebLLM init proves
+// that, we latch this and route to the CPU engine for the rest of the session
+// instead of retrying — and failing — the GPU path every turn.
+let gpuBroken = false;
 
 async function getEngine(model) {
   if (enginePromise && loadedModel === model) return enginePromise;
@@ -90,15 +95,28 @@ async function getWllama() {
 }
 
 export async function browserChat(config, messages, { schema = null, temperature = 0.2 } = {}) {
-  if (webgpuAvailable()) {
-    const engine = await getEngine(modelFromBase(config.base_url));
-    const res = await engine.chat.completions.create({
-      messages,
-      temperature,
-      ...(schema ? { response_format: { type: 'json_object' } } : {}),
-    });
-    progressCb?.(null); // signal "done loading" once the first response lands
-    return res.choices?.[0]?.message?.content ?? '';
+  if (webgpuAvailable() && !gpuBroken) {
+    let engine = null;
+    try {
+      engine = await getEngine(modelFromBase(config.base_url));
+    } catch {
+      // Engine INIT failed despite navigator.gpu — the GPU isn't really usable.
+      // Latch it and drop to the CPU engine below. (A failure DURING completion,
+      // by contrast, surfaces normally — that's not a GPU-availability problem.)
+      gpuBroken = true;
+      enginePromise = null;
+      loadedModel = null;
+      progressCb?.(null);
+    }
+    if (engine) {
+      const res = await engine.chat.completions.create({
+        messages,
+        temperature,
+        ...(schema ? { response_format: { type: 'json_object' } } : {}),
+      });
+      progressCb?.(null); // signal "done loading" once the first response lands
+      return res.choices?.[0]?.message?.content ?? '';
+    }
   }
   // No WebGPU → run the small GGUF on CPU. Slower, same return contract. The MLC
   // model id in config.base_url is ignored here (see FALLBACK_GGUF).

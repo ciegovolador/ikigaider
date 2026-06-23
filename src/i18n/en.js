@@ -126,4 +126,5 @@ export default {
   'app.loading': 'Loading…',
   'app.initFailed': 'Init failed: {msg}',
   'llm.loading': 'Loading local model… {pct}%',
+  'llm.fallback': 'Couldn’t reach your endpoint, so I’m coaching with the in-browser model for now. Fix it under ⚙ to switch back.',
 };

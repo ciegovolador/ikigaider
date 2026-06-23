@@ -5,7 +5,7 @@
 // model, return the parsed JSON. The math (ikigai.js) and the move decision
 // (policy.js) live elsewhere; the LLM only estimates scores and phrases coaching.
 
-import { isBrowserProvider, browserChat } from './webllm.js';
+import { isBrowserProvider, browserChat, DEFAULT_BROWSER_BASE } from './webllm.js';
 import {
   buildAssessMessages,
   buildCoachMessages,
@@ -15,6 +15,13 @@ import {
 
 // Re-export so existing importers (and llm.test.js) keep resolving extractJson here.
 export { extractJson };
+
+// When a BYO endpoint is unreachable we quietly fall back to the in-browser
+// model rather than dead-end the user. The UI subscribes here to show a gentle,
+// localized note ("couldn't reach your endpoint, using the local model"). The
+// arg is the endpoint we couldn't reach.
+let onFallbackCb = null;
+export function onProviderFallback(cb) { onFallbackCb = cb; }
 
 // Build the chat-completions URL tolerantly: accept a bare host
 // (http://127.0.0.1:1234), a /v1 base, or a full .../chat/completions URL.
@@ -69,12 +76,15 @@ export async function chatRaw(config, messages, { temperature = 0.2, schema = nu
       // Browser fetch throws a TypeError for network failures AND blocked CORS,
       // with a browser-specific message ("Failed to fetch" / "NetworkError…")
       // that tells the user nothing — so we name the two real causes instead.
-      throw new Error(
+      // Tagged UNREACHABLE so assess/coach can auto-fall-back to the local model.
+      const err = new Error(
         `Couldn't reach your LLM at ${url}.\n` +
         'The browser couldn\'t connect — either the server isn\'t running (or the ' +
         'Base URL/port is wrong), or it\'s running but blocks browser requests (CORS).\n' +
         'Enable CORS: LM Studio → Developer → "Enable CORS" · llama.cpp → run with --cors · Ollama → set OLLAMA_ORIGINS.'
       );
+      err.code = 'UNREACHABLE';
+      throw err;
     }
   };
 
@@ -98,10 +108,26 @@ export async function chatRaw(config, messages, { temperature = 0.2, schema = nu
   return content;
 }
 
+// Run a chat, but if a BYO endpoint is UNREACHABLE, retry on the in-browser
+// model instead of failing. Only connection failures fall back — a bad key or a
+// model error still surfaces so the user fixes the real problem. No-op when the
+// config is already the in-browser engine.
+async function chatOrFallback(config, messages, schema) {
+  try {
+    return await chatRaw(config, messages, { schema });
+  } catch (e) {
+    if (e.code === 'UNREACHABLE' && !isBrowserProvider(config.base_url)) {
+      onFallbackCb?.(config.base_url);
+      return chatRaw({ base_url: DEFAULT_BROWSER_BASE }, messages, { schema });
+    }
+    throw e;
+  }
+}
+
 // assess: turn free text into one or more scored candidate activities.
 export async function assess(config, description) {
   const { messages, schema } = buildAssessMessages(description);
-  const out = await chatRaw(config, messages, { schema });
+  const out = await chatOrFallback(config, messages, schema);
   return parseModelJson(out);
 }
 
@@ -109,6 +135,6 @@ export async function assess(config, description) {
 // `locale` localizes the coaching prose only — the JSON contract stays English.
 export async function coach(config, { move, focal, portfolio, userText, locale }) {
   const { messages, schema } = buildCoachMessages({ move, focal, portfolio, userText, locale });
-  const out = await chatRaw(config, messages, { schema });
+  const out = await chatOrFallback(config, messages, schema);
   return parseModelJson(out);
 }

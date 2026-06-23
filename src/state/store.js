@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { initBrowserDb } from '../db/sqlite-browser.js';
 import { saveDbBytes, loadDbBytes } from '../db/persist.js';
 import { decideMove, bestActivity, uncertainty } from '../lib/policy.js';
-import { assess, coach } from '../lib/llm.js';
+import { assess, coach, onProviderFallback } from '../lib/llm.js';
 import { ingest as orchIngest, runTurn as orchRunTurn } from '../lib/orchestrator.js';
 import { onLoadProgress, DEFAULT_BROWSER_MODEL, DEFAULT_BROWSER_BASE } from '../lib/webllm.js';
 import { placementDraft } from '../i18n/index.js';
@@ -42,6 +42,19 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
     onLoadProgress((p) => setLlmProgress(p && p.progress < 1 ? p : null));
     return () => onLoadProgress(null);
   }, []);
+
+  // When a BYO endpoint is unreachable, llm.js retries on the in-browser model.
+  // Surface that as a calm, localized coach line (deduped within a turn) — a
+  // graceful hand-off, not a red error.
+  useEffect(() => {
+    onProviderFallback(() => {
+      setError(null);
+      setMessages((m) => (
+        m[m.length - 1]?.text === t('llm.fallback') ? m : [...m, { role: 'coach', text: t('llm.fallback') }]
+      ));
+    });
+    return () => onProviderFallback(null);
+  }, [t]);
 
   const refresh = useCallback(() => {
     const list = dbRef.current.listActivities().filter((a) => !a.archived);

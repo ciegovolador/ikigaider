@@ -113,4 +113,5 @@ export default {
   'app.loading': 'Cargando…',
   'app.initFailed': 'Fallo al iniciar: {msg}',
   'llm.loading': 'Cargando modelo local… {pct}%',
+  'llm.fallback': 'No pude conectar con tu endpoint, así que te oriento con el modelo del navegador por ahora. Arréglalo en ⚙ para volver a cambiar.',
 };
