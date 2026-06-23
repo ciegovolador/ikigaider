@@ -27,9 +27,11 @@ export const BROWSER_MODELS = [
 ];
 
 // CPU fallback model (no WebGPU): a small GGUF wllama loads from Hugging Face and
-// runs on CPU. Kept to the 0.5B class so CPU stays usable — the user's MLC model
-// choice above is only honoured on the WebGPU path.
-const FALLBACK_GGUF = { repo: 'bartowski/Qwen2.5-0.5B-Instruct-GGUF', file: 'Qwen2.5-0.5B-Instruct-Q4_K_M.gguf' };
+// runs on CPU. Qwen2.5-0.5B-Instruct is multilingual (matches our en/es UI) and
+// stays usable on CPU; Q8_0 is the high-quality quant so the coaching + JSON hold
+// up better than a lighter quant. The user's MLC model choice above is only
+// honoured on the WebGPU path.
+const FALLBACK_GGUF = { repo: 'bartowski/Qwen2.5-0.5B-Instruct-GGUF', file: 'Qwen2.5-0.5B-Instruct-Q8_0.gguf' };
 
 export function webgpuAvailable() {
   return typeof navigator !== 'undefined' && 'gpu' in navigator;
@@ -112,16 +114,25 @@ export async function browserChat(config, messages, { schema = null, temperature
       const res = await engine.chat.completions.create({
         messages,
         temperature,
-        ...(schema ? { response_format: { type: 'json_object' } } : {}),
+        // Constrain to our JSON schema (XGrammar) so even a small model can't
+        // reply with prose instead of JSON.
+        ...(schema ? { response_format: { type: 'json_object', schema: JSON.stringify(schema.schema) } } : {}),
       });
       progressCb?.(null); // signal "done loading" once the first response lands
       return res.choices?.[0]?.message?.content ?? '';
     }
   }
   // No WebGPU → run the small GGUF on CPU. Slower, same return contract. The MLC
-  // model id in config.base_url is ignored here (see FALLBACK_GGUF).
+  // model id in config.base_url is ignored here (see FALLBACK_GGUF). We grammar-
+  // constrain the output to our exact schema (json_schema/strict) so a weak CPU
+  // model can't reply with prose instead of JSON.
   const wllama = await getWllama();
-  const res = await wllama.createChatCompletion({ messages, temperature, max_tokens: 1024 });
+  const res = await wllama.createChatCompletion({
+    messages,
+    temperature,
+    max_tokens: 1024,
+    ...(schema ? { response_format: { type: 'json_schema', json_schema: { name: schema.name, schema: schema.schema, strict: true } } } : {}),
+  });
   progressCb?.(null);
   return res.choices?.[0]?.message?.content ?? '';
 }
