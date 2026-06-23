@@ -49,8 +49,9 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   useEffect(() => {
     onProviderFallback(() => {
       setError(null);
+      // Show the hand-off note once per conversation, not on every fallback turn.
       setMessages((m) => (
-        m[m.length - 1]?.text === t('llm.fallback') ? m : [...m, { role: 'coach', text: t('llm.fallback') }]
+        m.some((x) => x.text === t('llm.fallback')) ? m : [...m, { role: 'coach', text: t('llm.fallback') }]
       ));
     });
     return () => onProviderFallback(null);

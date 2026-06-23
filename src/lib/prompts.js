@@ -131,11 +131,13 @@ export function validatePayload(payload, schemaOrWrapper, { checkRange = true } 
 export function buildAssessMessages(description) {
   const sys = `${MODEL_BRIEF}
 
-Output ONLY a JSON object of the form:
-{"activities":[{"name":"...","scores":{${AXES.map((a) => `"${a}":0..1`).join(',')}},"conf":{${AXES.map((a) => `"${a}":0..1`).join(',')}}}]}
+Output ONLY a JSON object with an "activities" array. Each activity has a "name",
+a "scores" object and a "conf" object, both with keys ${AXES.join('/')} in 0..1.
 Extract 1-3 concrete activities the person mentions or implies, scored honestly
 (low scores are fine). If they have NOT named any concrete activity yet, return
-{"activities":[]} — do not ask questions, just return the empty array.`;
+{"activities":[]} — do not ask questions, just the empty array.
+Example of the SHAPE only — write your own values, never copy these:
+{"activities":[{"name":"teaching piano","scores":{"love":0.8,"good":0.7,"world":0.5,"paid":0.4},"conf":{"love":0.9,"good":0.8,"world":0.6,"paid":0.7}}]}`;
   return {
     messages: [
       { role: 'system', content: sys },
@@ -169,11 +171,12 @@ Decided move: ${move.mode}/${move.submode}${move.axis ? ` (axis: ${move.axis})` 
 Why: ${move.rationale}
 Focal activity: ${focal ? focal.name : '(none yet)'}
 
-Return STRICT JSON, no prose outside it:
-{"message":"the coaching, plain text",
- "updates":[{"name":"existing activity name","scores":{...},"conf":{...}}],
- "created":[{"name":"new activity","scores":{...},"conf":{...}}]}
-updates/created may be empty arrays.`;
+Return ONLY a JSON object with keys "message", "updates", "created". "message" is
+your real coaching as plain text, 2-4 sentences — write it yourself, never output a
+placeholder. "updates" re-scores activities you learned more about; "created" adds
+ONE new activity on explore moves only. Both arrays may be empty.
+Example of the SHAPE only — write your own values, never copy these:
+{"message":"Building synths is pure Passion: real skill and love, but it doesn't pay yet and few people need it. Put a price on one patch pack this month to lift the paid axis.","updates":[{"name":"building synths","scores":{"love":0.9,"good":0.7,"world":0.3,"paid":0.3},"conf":{"love":0.9,"good":0.8,"world":0.6,"paid":0.7}}],"created":[]}`;
 
   return {
     messages: [
