@@ -48,7 +48,7 @@ export default {
   'coach.title': 'Guía',
   'coach.empty': 'Cuéntame en qué pasas tu tiempo de verdad — un trabajo, un proyecto, un hobby al que siempre vuelves — y te coloco en el mapa. O {demo} para ver un recorrido completo primero.',
   'coach.empty.demo': 'prueba la demo',
-  'coach.thinking': 'pensando…',
+  'coach.thinking': 'pensando',
   'coach.interview': 'Cuéntame en qué pasas tu tiempo de verdad — un trabajo, un proyecto, un hobby al que siempre vuelves — y te coloco en el mapa.',
   'coach.demoNote': 'Recorrido de demo cargado — un ingeniero "cómodo pero vacío" con pasión por herramientas musicales. Explora el mapa y la matemática; conecta un LLM para seguir.',
   'coach.imported': 'Recorrido importado. Continúa donde lo dejaste.',

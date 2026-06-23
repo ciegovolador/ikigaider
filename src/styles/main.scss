@@ -174,7 +174,29 @@ input, textarea {
   .msg.user  { align-self: flex-end; background: rgba($accent, 0.13);
     border: 1px solid rgba($accent, 0.28); color: color.adjust($accent, $lightness: 30%);
     border-radius: 14px 14px 4px 14px; }
-  .msg.thinking { color: $ink-dim; font-style: italic; }
+  .msg.thinking {
+    color: $ink-dim; font-style: italic;
+    display: inline-flex; align-items: center; gap: 7px;
+    // the whole row breathes so it never reads as a frozen line
+    animation: think-pulse 1.8s ease-in-out infinite;
+    .dots { display: inline-flex; gap: 4px; font-style: normal; }
+    .dots i {
+      width: 5px; height: 5px; border-radius: 50%; background: currentColor;
+      opacity: 0.3; animation: think-bounce 1.2s ease-in-out infinite;
+    }
+    .dots i:nth-child(2) { animation-delay: 0.18s; }
+    .dots i:nth-child(3) { animation-delay: 0.36s; }
+  }
+  @keyframes think-bounce {
+    0%, 75%, 100% { opacity: 0.28; transform: translateY(0); }
+    35%           { opacity: 1;    transform: translateY(-4px); }
+  }
+  @keyframes think-pulse { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
+  // Respect users who ask for less motion: keep the dots, drop the movement.
+  @media (prefers-reduced-motion: reduce) {
+    .msg.thinking, .msg.thinking .dots i { animation: none; }
+    .msg.thinking .dots i { opacity: 0.6; }
+  }
   .move-badge { display: inline-flex; margin-bottom: 6px; }
 }
 

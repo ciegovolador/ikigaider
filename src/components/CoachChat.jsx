@@ -49,7 +49,12 @@ export default function CoachChat({
             {t('llm.loading', { pct: Math.round((llmProgress.progress || 0) * 100) })}
           </div>
         )}
-        {busy && !llmProgress && <div className="msg coach thinking">{t('coach.thinking')}</div>}
+        {busy && !llmProgress && (
+          <div className="msg coach thinking" role="status" aria-live="polite">
+            <span>{t('coach.thinking')}</span>
+            <span className="dots" aria-hidden="true"><i /><i /><i /></span>
+          </div>
+        )}
       </div>
 
       <div className="composer">

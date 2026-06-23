@@ -56,7 +56,7 @@ export default {
   'coach.title': 'Coach',
   'coach.empty': "Tell me what you actually spend your time on — a job, a project, a hobby you keep coming back to — and I'll place you on the map. Or {demo} to watch a full journey first.",
   'coach.empty.demo': 'try the demo',
-  'coach.thinking': 'thinking…',
+  'coach.thinking': 'thinking',
   'coach.interview': "Tell me what you actually spend time on — a job, a project, a hobby you keep coming back to — and I'll place you on the map.",
   'coach.demoNote': 'Demo journey loaded — a "comfortable but empty" engineer with a music-tools passion. Explore the map and the math; add an LLM to keep coaching.',
   'coach.imported': 'Journey imported. Pick up where you left off.',
