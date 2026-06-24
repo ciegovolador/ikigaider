@@ -98,8 +98,13 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   }, [refresh, hydrate]);
 
   // Init: migrate the legacy single journey (+ its config) into the library once,
-  // ensure an active session exists, then load it. Runs once on mount.
+  // ensure an active session exists, then load it. The ref guard makes this run
+  // exactly once — React 18 StrictMode double-invokes effects in dev, and
+  // "ensure a session exists" must not create two.
+  const initedRef = useRef(false);
   useEffect(() => {
+    if (initedRef.current) return;
+    initedRef.current = true;
     (async () => {
       try {
         const legacy = loadDbBytes();
