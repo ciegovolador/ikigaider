@@ -81,6 +81,13 @@ export default function App() {
         onClose={() => setGearOpen(false)}
         locale={locale}
         setLocale={setLocale}
+        sessions={ik.sessions}
+        activeSessionId={ik.activeSessionId}
+        busy={ik.busy}
+        onNewSession={ik.newSession}
+        onSwitchSession={ik.switchSession}
+        onRenameSession={ik.renameSession}
+        onDeleteSession={ik.deleteSession}
         t={t}
       />
     </div>

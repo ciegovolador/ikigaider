@@ -260,6 +260,24 @@ input, textarea {
       text-transform: uppercase; color: $ink-mute; } }
 }
 
+/* Session library list (inside the config popover) */
+.sessions {
+  display: flex; flex-direction: column; gap: 10px;
+  .session-list { list-style: none; display: flex; flex-direction: column; gap: 6px;
+    max-height: 220px; overflow-y: auto; }
+  .session-row { display: flex; align-items: center; gap: 6px;
+    .session-name { flex: 1; display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; text-align: left; background: $panel; min-height: 38px;
+      &:hover:not(:disabled) { border-color: $accent; } }
+    &.active .session-name { border-color: $accent; background: rgba($accent, 0.1);
+      cursor: default; opacity: 1; }
+    .session-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .session-active { font-family: $font-mono; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.08em; color: $accent; }
+    .session-actions { display: flex; gap: 2px; }
+    &.editing input { min-height: 38px; } }
+}
+
 /* ---- responsive: single column under 760px ---------------------------- */
 // On mobile the two panes stack, so the viewport cap is dropped and the page
 // scrolls normally (the desktop internal-scroll model doesn't fit one column).

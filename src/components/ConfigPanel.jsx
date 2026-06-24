@@ -3,12 +3,14 @@ import { LOCALES, LOCALE_LABELS } from '../i18n/index.js';
 import {
   BROWSER_MODELS, DEFAULT_BROWSER_MODEL, webgpuAvailable, isBrowserProvider, modelFromBase,
 } from '../lib/webllm.js';
+import SessionsPanel from './SessionsPanel.jsx';
 
-// BYO-LLM config + language + portable-SQLite import/export, tucked behind the ⚙
-// in the instrument strip. Config is the quietest thing in the app. Open state
-// is owned by App. Accessible dialog: Escape closes, focus is trapped + restored.
+// BYO-LLM config + language + the session library, tucked behind the ⚙ in the
+// instrument strip. Config is the quietest thing in the app. Open state is owned
+// by App. Accessible dialog: Escape closes, focus is trapped + restored.
 export default function ConfigPanel({
   config, onSave, onExport, onImport, open, onClose, locale, setLocale, t,
+  sessions, activeSessionId, busy, onNewSession, onSwitchSession, onRenameSession, onDeleteSession,
 }) {
   const [form, setForm] = useState(config || { base_url: '', api_key: '', model: '' });
   const browserCfg = isBrowserProvider(config?.base_url);
@@ -18,7 +20,6 @@ export default function ConfigPanel({
     browserCfg ? 'browser' : (config?.base_url ? 'byo' : 'browser'));
   const [browserModel, setBrowserModel] = useState(browserCfg ? modelFromBase(config.base_url) : DEFAULT_BROWSER_MODEL);
   const hasGpu = webgpuAvailable();
-  const fileRef = useRef(null);
   const popRef = useRef(null);
   const firstRef = useRef(null);
   const restoreRef = useRef(null);
@@ -115,15 +116,11 @@ export default function ConfigPanel({
         <button className="primary" onClick={save}>{t('config.save')}</button>
 
         <hr style={{ borderColor: 'var(--line, #2a2a38)', width: '100%' }} />
-        <strong>{t('config.journey')}</strong>
-        <div className="row">
-          <button onClick={onExport}>{t('config.export')}</button>
-          <button onClick={() => fileRef.current?.click()}>{t('config.import')}</button>
-          <input ref={fileRef} type="file" accept=".sqlite,.db,application/octet-stream"
-            style={{ display: 'none' }}
-            onChange={(e) => e.target.files[0] && (onImport(e.target.files[0]), onClose())} />
-        </div>
-        <span className="muted">{t('config.journey.note')}</span>
+        <SessionsPanel
+          sessions={sessions} activeId={activeSessionId} busy={busy}
+          onNew={onNewSession} onSwitch={onSwitchSession}
+          onRename={onRenameSession} onDelete={onDeleteSession}
+          onExport={onExport} onImport={onImport} t={t} />
 
         <hr />
         {/* One engine, three model-source front doors. The skill (Claude Code)
