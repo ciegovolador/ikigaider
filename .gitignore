@@ -1,8 +1,8 @@
 # Dependencies
 node_modules/
-package-lock.json
 pnpm-lock.yaml
 yarn.lock
+# package-lock.json IS committed — CI's `npm ci` (deploy.yml) requires it.
 
 # Build
 dist/
