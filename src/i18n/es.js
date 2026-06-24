@@ -102,6 +102,9 @@ export default {
   'config.import': 'Importar',
   'config.journey.note': 'Exporta cuando quieras, vuelve a conectar el archivo en cualquier equipo.',
   'config.language': 'Idioma',
+  'config.tab.sessions': 'Sesiones',
+  'config.tab.engine': 'Motor',
+  'config.tab.more': 'Más',
 
   // biblioteca de sesiones
   'session.title': 'Sesiones',

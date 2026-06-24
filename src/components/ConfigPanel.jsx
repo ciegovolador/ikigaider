@@ -5,13 +5,15 @@ import {
 } from '../lib/webllm.js';
 import SessionsPanel from './SessionsPanel.jsx';
 
-// BYO-LLM config + language + the session library, tucked behind the ⚙ in the
-// instrument strip. Config is the quietest thing in the app. Open state is owned
-// by App. Accessible dialog: Escape closes, focus is trapped + restored.
+// The ⚙ popover. Three tabs keep its concerns apart instead of one long scroll:
+//   Sessions (the library — most used)  ·  Engine (LLM + language)  ·  More (doors)
+// Config is the quietest thing in the app. Open state owned by App. Accessible
+// dialog: Escape closes, focus trapped + restored.
 export default function ConfigPanel({
   config, onSave, onExport, onImport, open, onClose, locale, setLocale, t,
   sessions, activeSessionId, busy, onNewSession, onSwitchSession, onRenameSession, onDeleteSession, onMixSession,
 }) {
+  const [tab, setTab] = useState('sessions');
   const [form, setForm] = useState(config || { base_url: '', api_key: '', model: '' });
   const browserCfg = isBrowserProvider(config?.base_url);
   // Cold-start: a fresh user (no endpoint configured yet) defaults to the
@@ -33,7 +35,6 @@ export default function ConfigPanel({
     const onKey = (e) => {
       if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
       if (e.key !== 'Tab') return;
-      // Simple focus trap within the dialog.
       const f = popRef.current?.querySelectorAll(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
       if (!f || !f.length) return;
@@ -58,6 +59,11 @@ export default function ConfigPanel({
     onClose();
   };
 
+  const tabBtn = (id, label, ref) => (
+    <button ref={ref} role="tab" aria-selected={tab === id}
+      className={`tab ${tab === id ? 'on' : ''}`} onClick={() => setTab(id)}>{label}</button>
+  );
+
   return (
     <div className="config-overlay" onClick={onClose}>
       <div className="config-pop panel stack" ref={popRef} onClick={(e) => e.stopPropagation()}
@@ -67,85 +73,99 @@ export default function ConfigPanel({
           <button className="ghost" onClick={onClose} aria-label={t('config.close')}>{t('config.close')}</button>
         </div>
 
-        <div className="field">
-          <label htmlFor="cfg-lang">{t('config.language')}</label>
-          <select id="cfg-lang" ref={firstRef} value={locale}
-            onChange={(e) => setLocale(e.target.value)}>
-            {LOCALES.map((l) => <option key={l} value={l}>{LOCALE_LABELS[l]}</option>)}
-          </select>
+        <div className="config-tabs" role="tablist">
+          {tabBtn('sessions', t('config.tab.sessions'), firstRef)}
+          {tabBtn('engine', t('config.tab.engine'))}
+          {tabBtn('more', t('config.tab.more'))}
         </div>
 
-        <div className="field">
-          <label htmlFor="cfg-engine">{t('config.engine')}</label>
-          <select id="cfg-engine" value={engine} onChange={(e) => setEngine(e.target.value)}>
-            <option value="browser">{t('config.engine.browser')}</option>
-            <option value="byo">{t('config.engine.byo')}</option>
-          </select>
-        </div>
+        {tab === 'sessions' && (
+          <SessionsPanel
+            sessions={sessions} activeId={activeSessionId} busy={busy}
+            onNew={onNewSession} onSwitch={onSwitchSession}
+            onRename={onRenameSession} onDelete={onDeleteSession} onMix={onMixSession}
+            onExport={onExport} onImport={onImport} t={t} />
+        )}
 
-        {engine === 'browser' ? (
+        {tab === 'engine' && (
           <>
             <div className="field">
-              <label htmlFor="cfg-bmodel">{t('config.engine.model')}</label>
-              <select id="cfg-bmodel" value={browserModel} onChange={(e) => setBrowserModel(e.target.value)}>
-                {BROWSER_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              <label htmlFor="cfg-engine">{t('config.engine')}</label>
+              <select id="cfg-engine" value={engine} onChange={(e) => setEngine(e.target.value)}>
+                <option value="browser">{t('config.engine.browser')}</option>
+                <option value="byo">{t('config.engine.byo')}</option>
               </select>
             </div>
-            <span className={`muted webgpu ${hasGpu ? 'ok' : 'no'}`}>
-              {hasGpu ? t('config.webgpu.ok') : t('config.webgpu.no')}
-            </span>
-            <span className="muted">{t('config.engine.note')}</span>
-          </>
-        ) : (
-          <>
-            <strong>{t('config.byo')}</strong>
+
+            {engine === 'browser' ? (
+              <>
+                <div className="field">
+                  <label htmlFor="cfg-bmodel">{t('config.engine.model')}</label>
+                  <select id="cfg-bmodel" value={browserModel} onChange={(e) => setBrowserModel(e.target.value)}>
+                    {BROWSER_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  </select>
+                </div>
+                <span className={`muted webgpu ${hasGpu ? 'ok' : 'no'}`}>
+                  {hasGpu ? t('config.webgpu.ok') : t('config.webgpu.no')}
+                </span>
+                <span className="muted">{t('config.engine.note')}</span>
+              </>
+            ) : (
+              <>
+                <strong>{t('config.byo')}</strong>
+                <div className="field">
+                  <label htmlFor="cfg-base">{t('config.baseUrl')}</label>
+                  <input id="cfg-base" value={form.base_url} onChange={set('base_url')} placeholder="http://localhost:8080/v1" />
+                </div>
+                <div className="field">
+                  <label htmlFor="cfg-key">{t('config.apiKey')}</label>
+                  <input id="cfg-key" value={form.api_key} onChange={set('api_key')} placeholder={t('config.apiKey.ph')} />
+                </div>
+                <div className="field">
+                  <label htmlFor="cfg-model">{t('config.model')}</label>
+                  <input id="cfg-model" value={form.model} onChange={set('model')} placeholder={t('config.model.ph')} />
+                </div>
+              </>
+            )}
+            <button className="primary" onClick={save}>{t('config.save')}</button>
+
+            <hr />
             <div className="field">
-              <label htmlFor="cfg-base">{t('config.baseUrl')}</label>
-              <input id="cfg-base" value={form.base_url} onChange={set('base_url')} placeholder="http://localhost:8080/v1" />
-            </div>
-            <div className="field">
-              <label htmlFor="cfg-key">{t('config.apiKey')}</label>
-              <input id="cfg-key" value={form.api_key} onChange={set('api_key')} placeholder={t('config.apiKey.ph')} />
-            </div>
-            <div className="field">
-              <label htmlFor="cfg-model">{t('config.model')}</label>
-              <input id="cfg-model" value={form.model} onChange={set('model')} placeholder={t('config.model.ph')} />
+              <label htmlFor="cfg-lang">{t('config.language')}</label>
+              <select id="cfg-lang" value={locale} onChange={(e) => setLocale(e.target.value)}>
+                {LOCALES.map((l) => <option key={l} value={l}>{LOCALE_LABELS[l]}</option>)}
+              </select>
             </div>
           </>
         )}
-        <button className="primary" onClick={save}>{t('config.save')}</button>
 
-        <hr style={{ borderColor: 'var(--line, #2a2a38)', width: '100%' }} />
-        <SessionsPanel
-          sessions={sessions} activeId={activeSessionId} busy={busy}
-          onNew={onNewSession} onSwitch={onSwitchSession}
-          onRename={onRenameSession} onDelete={onDeleteSession} onMix={onMixSession}
-          onExport={onExport} onImport={onImport} t={t} />
-
-        <hr />
-        {/* One engine, three model-source front doors. The skill (Claude Code)
-            ships now; MCP + self-host are named but disabled so the panel
-            teaches the platform story instead of burying the skill as a row. */}
-        <strong>{t('config.doors')}</strong>
-        <div className="doors">
-          <div className="door">
-            <div className="door-head">
-              <span className="door-name">Claude Code</span>
-              <a className="button" href={`${import.meta.env.BASE_URL}ikigaider-skill.zip`} download>
-                {t('config.skill.get')}
-              </a>
+        {tab === 'more' && (
+          <>
+            {/* One engine, three model-source front doors. Claude Code ships now;
+                MCP + self-host are named but disabled so the panel teaches the
+                platform story instead of burying the skill as a row. */}
+            <strong>{t('config.doors')}</strong>
+            <div className="doors">
+              <div className="door">
+                <div className="door-head">
+                  <span className="door-name">Claude Code</span>
+                  <a className="button" href={`${import.meta.env.BASE_URL}ikigaider-skill.zip`} download>
+                    {t('config.skill.get')}
+                  </a>
+                </div>
+                <span className="muted door-note">{t('config.skill.note')}</span>
+              </div>
+              <div className="door door-soon">
+                <span className="door-name">MCP server</span>
+                <span className="door-tag">{t('config.doors.soon')}</span>
+              </div>
+              <div className="door door-soon">
+                <span className="door-name">{t('config.door.selfhost')}</span>
+                <span className="door-tag">{t('config.doors.soon')}</span>
+              </div>
             </div>
-            <span className="muted door-note">{t('config.skill.note')}</span>
-          </div>
-          <div className="door door-soon">
-            <span className="door-name">MCP server</span>
-            <span className="door-tag">{t('config.doors.soon')}</span>
-          </div>
-          <div className="door door-soon">
-            <span className="door-name">{t('config.door.selfhost')}</span>
-            <span className="door-tag">{t('config.doors.soon')}</span>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

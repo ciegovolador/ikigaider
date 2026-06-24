@@ -114,6 +114,9 @@ export default {
   'config.import': 'Import',
   'config.journey.note': 'Export anytime, plug the file back in on any machine.',
   'config.language': 'Language',
+  'config.tab.sessions': 'Sessions',
+  'config.tab.engine': 'Engine',
+  'config.tab.more': 'More',
 
   // session library
   'session.title': 'Sessions',
