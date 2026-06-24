@@ -58,7 +58,7 @@ describe('db.mjs node adapter', () => {
   it('opens a missing path as a fresh version-stamped store', async () => {
     const p = tmpDb(); cleanup.push(p);
     const store = await openDb(p);
-    expect(store.userVersion()).toBe(1000);
+    expect(store.userVersion()).toBe(1001);
     expect(store.listActivities()).toEqual([]);
   });
 
@@ -72,7 +72,7 @@ describe('db.mjs node adapter', () => {
     // Reopen via the SAME createDb the web import uses (db.mjs wraps it).
     const reread = await openDb(p);
     expect(reread.listActivities()[0].name).toBe('craft');
-    expect(reread.userVersion()).toBe(1000);
+    expect(reread.userVersion()).toBe(1001);
   });
 
   it('sanitized write carries no config (no api_key travels)', async () => {
@@ -95,7 +95,7 @@ describe('db.mjs node adapter', () => {
 describe('cli.mjs — turn loop + validate-or-write-nothing', () => {
   it('init stamps and persists; state reads back empty', () => {
     const p = tmpDb(); cleanup.push(p);
-    expect(run(['init', '--db', p]).userVersion).toBe(1000);
+    expect(run(['init', '--db', p]).userVersion).toBe(1001);
     const s = run(['state', '--db', p]);
     expect(s.portfolio).toEqual([]);
     expect(s.focalId).toBeNull();

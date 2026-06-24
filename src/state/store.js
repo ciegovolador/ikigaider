@@ -93,9 +93,12 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   const activate = useCallback(async (id, bytes) => {
     dbRef.current = await initBrowserDb(bytes || undefined);
     activeIdRef.current = id;
-    mixedContextRef.current = ''; // mixed-in context is per-session
     setActiveSessionId(id);
-    setMessages([]);
+    // Restore the conversation: visible turns render; hidden '_context' rows (mixed-
+    // in digests) reload into the coach context, not the thread.
+    const all = dbRef.current.listMessages();
+    mixedContextRef.current = all.filter((m) => m.role === '_context').map((m) => m.text).join('\n');
+    setMessages(all.filter((m) => m.role !== '_context'));
     setSim(null);
     setError(null);
     setDraft('');
@@ -206,7 +209,8 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
     const id = await putSession({ name: name || t('session.imported'), bytes: fresh.export() });
     await idbSetActive(id);
     await activate(id, fresh.export());
-    if (note) setMessages([{ role: 'coach', text: note }]);
+    if (note) say('coach', note); // persists into the new session
+    persist();
     await refreshSessions();
   }, [persist, activate, refreshSessions, t]);
 
@@ -221,7 +225,13 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   }, [importBytes, t]);
 
   // --- COMMANDS: coaching turn ----------------------------------------------
-  const say = (role, text, mv) => setMessages((m) => [...m, { role, text, move: mv }]);
+  // Append a message to the thread AND persist it to the active journey, so the
+  // conversation is restored when the session is reopened (the journey blob, saved
+  // to IndexedDB by persist(), carries the messages table).
+  const say = (role, text, mv) => {
+    setMessages((m) => [...m, { role, text, move: mv }]);
+    dbRef.current?.addMessage(role, text, mv ?? null);
+  };
 
   const applyTurn = useCallback((turn) => {
     setPortfolio(turn.portfolio);
@@ -265,8 +275,10 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
     const digest = summarizeJourney(src.listActivities().filter((a) => !a.archived));
     if (!digest) { say('coach', t('mix.empty', { name })); return; }
     mixedContextRef.current = mixedContextRef.current ? `${mixedContextRef.current}\n${digest}` : digest;
-    say('coach', t('mix.summary', { name }));
-  }, [sessions, t]);
+    dbRef.current.addMessage('_context', digest); // persist the digest (hidden row)
+    say('coach', t('mix.summary', { name }));     // visible confirmation
+    persist();
+  }, [sessions, t, persist]);
 
   const start = useCallback(async (text) => {
     setBusy(true); setError(null); setStarted(true); say('user', text);

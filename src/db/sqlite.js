@@ -28,6 +28,13 @@ CREATE TABLE IF NOT EXISTS moves (
   ts TEXT NOT NULL, mode TEXT, submode TEXT,
   focal_activity_id TEXT, rationale TEXT, assignment TEXT
 );
+-- v1.1: the conversation, so restoring a session restores its chat. role is
+-- 'user'/'coach' (rendered) or '_context' (a mixed-in digest; hidden, fed to the
+-- coach). 'move' is the JSON move for a coach badge, or NULL.
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL, role TEXT, text TEXT, move TEXT
+);
 `;
 
 // --- schema versioning (Postel: liberal accept, conservative produce) --------
@@ -41,17 +48,19 @@ CREATE TABLE IF NOT EXISTS moves (
 //     newer reader didn't expect. (don't-break-userspace; additive = soft fork)
 //   • same MAJOR, older MINOR  -> run forward migrations, then stamp current.
 //   • newer MAJOR              -> REFUSE (a breaking change); never corrupt it.
-// The migration LADDER is deliberately empty until a real v1.1 schema change —
-// the framework is here; the process is deferred (CRAN-style deprecation when
-// it lands).
+// v1.1 added the `messages` table — additive, so a v1.0 file just gains an empty
+// one via SCHEMA's CREATE IF NOT EXISTS on open, and we re-stamp it to 1001. An
+// older (v1.0) reader opening a 1001 file ignores the table (tolerant read).
 const SCHEMA_MAJOR = 1;
-const SCHEMA_MINOR = 0;
+const SCHEMA_MINOR = 1;
 const SCHEMA_UV = SCHEMA_MAJOR * 1000 + SCHEMA_MINOR;
 
 // Forward-only migrations within the current MAJOR. Key = target MINOR; each
-// upgrades from (key-1) to key. Empty by design until the first additive change.
+// upgrades from (key-1) to key. v1.1's `messages` table is additive (created by
+// SCHEMA on open), so no data migration is needed — the stamp bump alone records
+// the version. Non-additive changes (column drops, type changes) would go here.
 const MIGRATIONS = {
-  // 1: (db) => db.run('ALTER TABLE scores ADD COLUMN note TEXT'),
+  // 1: messages table — additive, handled by SCHEMA. No-op migration.
 };
 
 function readUserVersion(db) {
@@ -175,6 +184,17 @@ class IkigaiStore {
   }
   listMoves() {
     return rows(this.db, 'SELECT * FROM moves ORDER BY id');
+  }
+
+  // --- messages (the conversation; v1.1) ---
+  // `move` is the coach-move object (badge) or null; stored as JSON.
+  addMessage(role, text, move = null) {
+    this.db.run('INSERT INTO messages (ts, role, text, move) VALUES (?,?,?,?)',
+      [now(), role, text ?? '', move ? JSON.stringify(move) : null]);
+  }
+  listMessages() {
+    return rows(this.db, 'SELECT role, text, move FROM messages ORDER BY id')
+      .map((m) => ({ role: m.role, text: m.text, move: m.move ? JSON.parse(m.move) : undefined }));
   }
 
   // --- portable file ---

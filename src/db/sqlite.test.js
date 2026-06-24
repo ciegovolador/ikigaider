@@ -69,27 +69,45 @@ describe('schema versioning (Postel)', () => {
 
   it('stamps a fresh db with the current schema version', () => {
     const db = createDb(SQL);
-    expect(db.userVersion()).toBe(1000); // MAJOR 1 * 1000 + MINOR 0
+    expect(db.userVersion()).toBe(1001); // MAJOR 1 * 1000 + MINOR 1
   });
 
-  it('stamps an unmarked (pre-versioning) file as the v1.0 baseline', () => {
-    // demo.sqlite and every already-exported journey read user_version 0.
+  it('forward-migrates an unmarked (pre-versioning) file to current, data intact', () => {
+    // demo.sqlite and every pre-versioning journey read user_version 0; opening
+    // them adds the v1.1 messages table (additive) and stamps 1001.
     const bytes = fileAtVersion(0, (db) => db.addActivity('legacy'));
     const restored = createDb(SQL, bytes);
-    expect(restored.userVersion()).toBe(1000);
+    expect(restored.userVersion()).toBe(1001);
     expect(restored.listActivities()[0].name).toBe('legacy');
+    expect(restored.listMessages()).toEqual([]); // messages table now present
   });
 
   it('reads a newer-MINOR file as-is without rewriting its version (liberal accept)', () => {
-    const bytes = fileAtVersion(1001, (db) => db.addActivity('from v1.1'));
+    const bytes = fileAtVersion(1002, (db) => db.addActivity('from v1.2'));
     const restored = createDb(SQL, bytes);
-    expect(restored.userVersion()).toBe(1001); // left untouched (conservative produce)
-    expect(restored.listActivities()[0].name).toBe('from v1.1');
+    expect(restored.userVersion()).toBe(1002); // left untouched (conservative produce)
+    expect(restored.listActivities()[0].name).toBe('from v1.2');
   });
 
   it('refuses a newer-MAJOR file instead of corrupting it', () => {
     const bytes = fileAtVersion(2000, (db) => db.addActivity('from v2'));
     expect(() => createDb(SQL, bytes)).toThrow(/newer ikigaider \(v2\.x\)/);
+  });
+});
+
+describe('messages (v1.1 conversation persistence)', () => {
+  it('round-trips messages with move JSON, in order, and survives export/import', () => {
+    const db = createDb(SQL);
+    db.addMessage('user', 'I play piano');
+    db.addMessage('coach', 'keep going', { mode: 'exploit', submode: 'keep' });
+    db.addMessage('_context', '- gig: Paycheck (ikigai 0.05, weakest love 0.1)');
+
+    const restored = createDb(SQL, db.export());
+    const msgs = restored.listMessages();
+    expect(msgs.map((m) => m.role)).toEqual(['user', 'coach', '_context']);
+    expect(msgs[1].move).toEqual({ mode: 'exploit', submode: 'keep' });
+    expect(msgs[0].move).toBeUndefined();
+    expect(msgs[2].text).toContain('Paycheck');
   });
 });
 
