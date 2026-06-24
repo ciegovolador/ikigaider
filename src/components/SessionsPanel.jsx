@@ -5,7 +5,7 @@ import { useRef, useState } from 'react';
 // a name; New starts a clean session; rename is inline; delete confirms (with an
 // export-first nudge). Export saves the active journey; Import restores a file as
 // a NEW session. All session controls disable while a coach turn is in flight.
-function SessionRow({ s, active, onSwitch, onRename, onDelete, busy, t }) {
+function SessionRow({ s, active, onSwitch, onRename, onDelete, onMix, busy, t }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(s.name);
 
@@ -37,6 +37,10 @@ function SessionRow({ s, active, onSwitch, onRename, onDelete, busy, t }) {
         {active && <span className="session-active">{t('session.active')}</span>}
       </button>
       <span className="session-actions">
+        {!active && (
+          <button className="ghost" onClick={() => onMix(s.id)} disabled={busy}
+            aria-label={t('session.mix')} title={t('session.mix')}>⧉</button>
+        )}
         <button className="ghost" onClick={() => setEditing(true)} disabled={busy}
           aria-label={t('session.rename')} title={t('session.rename')}>✎</button>
         <button className="ghost" onClick={() => {
@@ -48,9 +52,11 @@ function SessionRow({ s, active, onSwitch, onRename, onDelete, busy, t }) {
 }
 
 export default function SessionsPanel({
-  sessions, activeId, busy, onNew, onSwitch, onRename, onDelete, onExport, onImport, t,
+  sessions, activeId, busy, onNew, onSwitch, onRename, onDelete, onMix, onExport, onImport, t,
 }) {
-  const fileRef = useRef(null);
+  const importRef = useRef(null);
+  const mixRef = useRef(null);
+  const pick = (fn) => (e) => { if (e.target.files[0]) { fn(e.target.files[0]); e.target.value = ''; } };
   return (
     <div className="sessions">
       <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -60,15 +66,17 @@ export default function SessionsPanel({
       <ul className="session-list">
         {sessions.map((s) => (
           <SessionRow key={s.id} s={s} active={s.id === activeId}
-            onSwitch={onSwitch} onRename={onRename} onDelete={onDelete} busy={busy} t={t} />
+            onSwitch={onSwitch} onRename={onRename} onDelete={onDelete} onMix={onMix} busy={busy} t={t} />
         ))}
       </ul>
       <div className="row">
         <button onClick={onExport} disabled={busy}>{t('config.export')}</button>
-        <button onClick={() => fileRef.current?.click()} disabled={busy}>{t('config.import')}</button>
-        <input ref={fileRef} type="file" accept=".sqlite,.db,application/octet-stream"
-          style={{ display: 'none' }}
-          onChange={(e) => { if (e.target.files[0]) { onImport(e.target.files[0]); e.target.value = ''; } }} />
+        <button onClick={() => importRef.current?.click()} disabled={busy}>{t('config.import')}</button>
+        <button onClick={() => mixRef.current?.click()} disabled={busy}>{t('session.mix.file')}</button>
+        <input ref={importRef} type="file" accept=".sqlite,.db,application/octet-stream"
+          style={{ display: 'none' }} onChange={pick(onImport)} />
+        <input ref={mixRef} type="file" accept=".sqlite,.db,application/octet-stream"
+          style={{ display: 'none' }} onChange={pick(onMix)} />
       </div>
       <span className="muted">{t('session.note')}</span>
     </div>

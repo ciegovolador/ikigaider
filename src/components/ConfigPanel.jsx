@@ -10,7 +10,7 @@ import SessionsPanel from './SessionsPanel.jsx';
 // by App. Accessible dialog: Escape closes, focus is trapped + restored.
 export default function ConfigPanel({
   config, onSave, onExport, onImport, open, onClose, locale, setLocale, t,
-  sessions, activeSessionId, busy, onNewSession, onSwitchSession, onRenameSession, onDeleteSession,
+  sessions, activeSessionId, busy, onNewSession, onSwitchSession, onRenameSession, onDeleteSession, onMixSession,
 }) {
   const [form, setForm] = useState(config || { base_url: '', api_key: '', model: '' });
   const browserCfg = isBrowserProvider(config?.base_url);
@@ -119,7 +119,7 @@ export default function ConfigPanel({
         <SessionsPanel
           sessions={sessions} activeId={activeSessionId} busy={busy}
           onNew={onNewSession} onSwitch={onSwitchSession}
-          onRename={onRenameSession} onDelete={onDeleteSession}
+          onRename={onRenameSession} onDelete={onDeleteSession} onMix={onMixSession}
           onExport={onExport} onImport={onImport} t={t} />
 
         <hr />

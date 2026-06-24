@@ -151,7 +151,7 @@ const LANG_NAMES = { en: 'English', es: 'Spanish' };
 
 // coach: given the decided move, phrase the coaching and re-estimate scores.
 // `locale` localizes the coaching prose only — the JSON contract stays English.
-export function buildCoachMessages({ move, focal, portfolio, userText, locale }) {
+export function buildCoachMessages({ move, focal, portfolio, userText, locale, context }) {
   const portfolioText = portfolio
     .map((a) => `- ${a.name}: ${AXES.map((ax) => `${ax} ${a.scores[ax].toFixed(2)}`).join(', ')}`)
     .join('\n');
@@ -178,10 +178,16 @@ ONE new activity on explore moves only. Both arrays may be empty.
 Example of the SHAPE only — write your own values, never copy these:
 {"message":"Building synths is pure Passion: real skill and love, but it doesn't pay yet and few people need it. Put a price on one patch pack this month to lift the paid axis.","updates":[{"name":"building synths","scores":{"love":0.9,"good":0.7,"world":0.3,"paid":0.3},"conf":{"love":0.9,"good":0.8,"world":0.6,"paid":0.7}}],"created":[]}`;
 
+  // `context` = a summary the person mixed in from another session. It rides as
+  // background the coach reasons over, but is NOT re-scored into the portfolio.
+  const contextBlock = context
+    ? `\n\nBackground the person carried in from another session (context only, do not re-score it):\n${context}`
+    : '';
+
   return {
     messages: [
       { role: 'system', content: sys },
-      { role: 'user', content: `Portfolio:\n${portfolioText}\n\nWhat I said: ${userText || '(start)'}` },
+      { role: 'user', content: `Portfolio:\n${portfolioText}${contextBlock}\n\nWhat I said: ${userText || '(start)'}` },
     ],
     schema: COACH_SCHEMA,
   };

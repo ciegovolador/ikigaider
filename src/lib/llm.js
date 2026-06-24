@@ -133,8 +133,8 @@ export async function assess(config, description) {
 
 // coach: given the decided move, phrase the coaching and re-estimate scores.
 // `locale` localizes the coaching prose only — the JSON contract stays English.
-export async function coach(config, { move, focal, portfolio, userText, locale }) {
-  const { messages, schema } = buildCoachMessages({ move, focal, portfolio, userText, locale });
+export async function coach(config, { move, focal, portfolio, userText, locale, context }) {
+  const { messages, schema } = buildCoachMessages({ move, focal, portfolio, userText, locale, context });
   const out = await chatOrFallback(config, messages, schema);
   return parseModelJson(out);
 }

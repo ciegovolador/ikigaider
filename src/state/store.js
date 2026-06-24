@@ -14,6 +14,7 @@ import {
 import { decideMove, bestActivity, uncertainty } from '../lib/policy.js';
 import { assess, coach, onProviderFallback } from '../lib/llm.js';
 import { ingest as orchIngest, runTurn as orchRunTurn } from '../lib/orchestrator.js';
+import { summarizeJourney } from '../lib/digest.js';
 import { onLoadProgress, DEFAULT_BROWSER_MODEL, DEFAULT_BROWSER_BASE } from '../lib/webllm.js';
 import { placementDraft } from '../i18n/index.js';
 
@@ -24,6 +25,9 @@ const DEFAULT_CONFIG = { base_url: DEFAULT_BROWSER_BASE, api_key: '', model: DEF
 export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   const dbRef = useRef(null);
   const activeIdRef = useRef(null); // current session id, for the persist() closure
+  // Summary the user mixed in from other sessions — rides into the coach prompt as
+  // context (not re-scored). Belongs to the active session; cleared on switch/new.
+  const mixedContextRef = useRef('');
   const [ready, setReady] = useState(false);
   const [config, setConfig] = useState(null);
   const [sessions, setSessions] = useState([]);          // session library (metadata)
@@ -89,6 +93,7 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   const activate = useCallback(async (id, bytes) => {
     dbRef.current = await initBrowserDb(bytes || undefined);
     activeIdRef.current = id;
+    mixedContextRef.current = ''; // mixed-in context is per-session
     setActiveSessionId(id);
     setMessages([]);
     setSim(null);
@@ -227,16 +232,41 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   }, []);
 
   const runTurn = useCallback(async (userText, executeMove, prevFocalId) => {
-    const turn = await orchRunTurn(dbRef.current, coach, { config, userText, executeMove, prevFocalId, locale });
+    const turn = await orchRunTurn(dbRef.current, coach, {
+      config, userText, executeMove, prevFocalId, locale, context: mixedContextRef.current || undefined,
+    });
     applyTurn(turn);
   }, [config, locale, applyTurn]);
 
   const ingest = useCallback(async (text) => {
     setGlide(false);
-    const r = await orchIngest(dbRef.current, { assess, coach }, { config, text, locale });
+    const r = await orchIngest(dbRef.current, { assess, coach }, {
+      config, text, locale, context: mixedContextRef.current || undefined,
+    });
     if (r.kind === 'placed') applyTurn(r.turn);
     else { setPortfolio(r.portfolio); say('coach', t('coach.interview')); }
   }, [config, locale, applyTurn, t]);
+
+  // Mix = bring another session's CONTEXT (a digest) into the active one. We do
+  // NOT copy its activities onto the map; the summary rides into the next coach
+  // turn as background. `source` is a session id (from the list) or a File.
+  const mixInto = useCallback(async (source) => {
+    let bytes;
+    let name;
+    if (typeof source === 'string') {
+      bytes = await idbGetBytes(source);
+      name = sessions.find((s) => s.id === source)?.name || t('session.untitled');
+    } else {
+      bytes = new Uint8Array(await source.arrayBuffer());
+      name = source.name || t('session.imported');
+    }
+    if (!bytes) return;
+    const src = await initBrowserDb(bytes);
+    const digest = summarizeJourney(src.listActivities().filter((a) => !a.archived));
+    if (!digest) { say('coach', t('mix.empty', { name })); return; }
+    mixedContextRef.current = mixedContextRef.current ? `${mixedContextRef.current}\n${digest}` : digest;
+    say('coach', t('mix.summary', { name }));
+  }, [sessions, t]);
 
   const start = useCallback(async (text) => {
     setBusy(true); setError(null); setStarted(true); say('user', text);
@@ -268,7 +298,7 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   return {
     ready, initError, error, config, portfolio, focal, focalId, move, messages, busy, glide, started,
     trajectory, focalUncertainty, draft, setDraft, sim, llmProgress,
-    sessions, activeSessionId, newSession, switchSession, renameSession, deleteSession,
+    sessions, activeSessionId, newSession, switchSession, renameSession, deleteSession, mixInto,
     saveConfig, exportDb, importDb, loadDemo, start, send, placeFromMap,
     simulate, clearSim, pickHistory, coachToward,
   };

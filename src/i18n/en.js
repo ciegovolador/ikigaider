@@ -128,6 +128,10 @@ export default {
   'session.delete': 'Delete',
   'session.delete.confirm': 'Delete "{name}"? This can\'t be undone on this device — export it first if you want to keep it.',
   'session.note': 'Each session is a separate journey on this device. Switch anytime; export to keep or move one.',
+  'session.mix': 'Mix into current',
+  'session.mix.file': 'Mix a file…',
+  'mix.summary': 'Mixed in "{name}" — I\'ll keep its context in mind as we coach.',
+  'mix.empty': '"{name}" has nothing to mix in yet.',
 
   // model-source front doors (one engine, three doors; Claude Code ships now)
   'config.doors': 'Other ways to run ikigaider',

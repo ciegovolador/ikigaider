@@ -116,6 +116,10 @@ export default {
   'session.delete': 'Eliminar',
   'session.delete.confirm': '¿Eliminar "{name}"? No se puede deshacer en este dispositivo — expórtala primero si quieres conservarla.',
   'session.note': 'Cada sesión es un recorrido aparte en este dispositivo. Cambia cuando quieras; exporta para conservar o mover una.',
+  'session.mix': 'Mezclar en la actual',
+  'session.mix.file': 'Mezclar un archivo…',
+  'mix.summary': 'Mezclé "{name}" — tendré en cuenta su contexto mientras te oriento.',
+  'mix.empty': '"{name}" todavía no tiene nada para mezclar.',
 
   // puertas de origen del modelo (un motor, tres puertas; Claude Code ya disponible)
   'config.doors': 'Otras formas de usar ikigaider',

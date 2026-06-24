@@ -50,9 +50,9 @@ export function applyPayload(store, payload) {
 
 // Execute the decided move via the injected coach(), apply results, decide next.
 // Pure: returns the state delta; the caller writes it to React (or stdout).
-export async function runTurn(store, coach, { config, userText, executeMove, prevFocalId, locale }) {
+export async function runTurn(store, coach, { config, userText, executeMove, prevFocalId, locale, context }) {
   const focal = store.listActivities().find((a) => a.id === prevFocalId) || null;
-  const payload = await coach(config, { move: executeMove, focal, portfolio: active(store), userText, locale });
+  const payload = await coach(config, { move: executeMove, focal, portfolio: active(store), userText, locale, context });
   const createdIds = applyPayload(store, payload);
   const list = active(store);
 
@@ -74,14 +74,14 @@ export async function runTurn(store, coach, { config, userText, executeMove, pre
 
 // Assess free text into activities, then either place the best one (running a
 // first coach turn) or, if nothing concrete surfaced, signal an interview.
-export async function ingest(store, { assess, coach }, { config, text, locale }) {
+export async function ingest(store, { assess, coach }, { config, text, locale, context }) {
   const payload = await assess(config, text);
   applyPayload(store, payload);
   const list = active(store);
   const best = bestActivity(list);
   if (best) {
     const turn = await runTurn(store, coach, {
-      config, userText: '', executeMove: decideMove(list, best.id), prevFocalId: best.id, locale,
+      config, userText: '', executeMove: decideMove(list, best.id), prevFocalId: best.id, locale, context,
     });
     return { kind: 'placed', turn };
   }

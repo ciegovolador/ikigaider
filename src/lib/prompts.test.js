@@ -45,6 +45,16 @@ describe('buildCoachMessages', () => {
     expect(messages[0].content).toContain('Write the "message" field in Spanish');
     expect(messages[0].content).toContain('Keep all JSON keys and activity names in English');
   });
+  it('threads a mixed-in context block into the user message (context-only)', () => {
+    const { messages } = buildCoachMessages({ ...base, locale: 'en', context: '- side gig: Paycheck (ikigai 0.05, weakest What you love 0.10)' });
+    expect(messages[1].content).toContain('another session');
+    expect(messages[1].content).toContain('side gig: Paycheck');
+    expect(messages[1].content).toMatch(/do not re-score/i);
+  });
+  it('omits the context block when no context is mixed in', () => {
+    const { messages } = buildCoachMessages({ ...base, locale: 'en' });
+    expect(messages[1].content).not.toMatch(/another session/);
+  });
 });
 
 describe('validatePayload', () => {

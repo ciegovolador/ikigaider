@@ -88,6 +88,7 @@ export default function App() {
         onSwitchSession={ik.switchSession}
         onRenameSession={ik.renameSession}
         onDeleteSession={ik.deleteSession}
+        onMixSession={ik.mixInto}
         t={t}
       />
     </div>
