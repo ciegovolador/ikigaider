@@ -1,26 +1,33 @@
-// store.js — orchestration. Binds the pure libs (ikigai/policy/llm), the DB,
-// and React together. The only module that knows about all of them.
+// store.js — orchestration + the session library's React binding. Binds the pure
+// libs (ikigai/policy/llm), the active journey DB, the IndexedDB session store,
+// and React together. CQRS: it DISPATCHES commands (session/journey writes) and
+// SELECTS from queries (portfolio, sessions, projections); it never mixes them.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { initBrowserDb } from '../db/sqlite-browser.js';
-import { saveDbBytes, loadDbBytes } from '../db/persist.js';
+import { loadDbBytes, clearDbBytes, loadGlobalConfig, saveGlobalConfig } from '../db/persist.js';
+import {
+  listSessions as idbList, getBytes as idbGetBytes, getActiveId as idbGetActiveId,
+  putSession, setActiveId as idbSetActive, migrateLegacy,
+  renameSession as idbRename, deleteSession as idbDelete,
+} from '../db/sessions.js';
 import { decideMove, bestActivity, uncertainty } from '../lib/policy.js';
 import { assess, coach, onProviderFallback } from '../lib/llm.js';
 import { ingest as orchIngest, runTurn as orchRunTurn } from '../lib/orchestrator.js';
 import { onLoadProgress, DEFAULT_BROWSER_MODEL, DEFAULT_BROWSER_BASE } from '../lib/webllm.js';
 import { placementDraft } from '../i18n/index.js';
 
-// A fresh user (or an imported journey, whose config was stripped on export)
-// defaults to the zero-setup in-browser engine — WebGPU if available, else the
-// CPU fallback. No endpoint, no key: send a message and it just coaches.
+// A fresh user defaults to the zero-setup in-browser engine — WebGPU if available,
+// else the CPU fallback. No endpoint, no key: send a message and it just coaches.
 const DEFAULT_CONFIG = { base_url: DEFAULT_BROWSER_BASE, api_key: '', model: DEFAULT_BROWSER_MODEL };
 
-// `t` and `locale` come from the LocaleProvider; default to identity/en so the
-// hook still works in tests or outside a provider.
 export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   const dbRef = useRef(null);
+  const activeIdRef = useRef(null); // current session id, for the persist() closure
   const [ready, setReady] = useState(false);
   const [config, setConfig] = useState(null);
+  const [sessions, setSessions] = useState([]);          // session library (metadata)
+  const [activeSessionId, setActiveSessionId] = useState(null);
   const [portfolio, setPortfolio] = useState([]);
   const [focalId, setFocalId] = useState(null);
   const [move, setMove] = useState(null);
@@ -31,10 +38,7 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   const [initError, setInitError] = useState(null);
   const [error, setError] = useState(null);
   const [draft, setDraft] = useState('');
-  // `sim` = a desired/what-if state the user is simulating (dragging the dot or
-  // picking a past state). Pure-math overlay — no LLM until they commit.
   const [sim, setSim] = useState(null);
-  // In-browser model download/init progress (null when idle/done).
   const [llmProgress, setLlmProgress] = useState(null);
 
   // Subscribe to the WebGPU model loader so the UI can show download progress.
@@ -43,13 +47,11 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
     return () => onLoadProgress(null);
   }, []);
 
-  // When a BYO endpoint is unreachable, llm.js retries on the in-browser model.
-  // Surface that as a calm, localized coach line (deduped within a turn) — a
-  // graceful hand-off, not a red error.
+  // BYO endpoint unreachable -> llm.js retries on the in-browser model; surface a
+  // calm, localized note once per conversation (not a red error).
   useEffect(() => {
     onProviderFallback(() => {
       setError(null);
-      // Show the hand-off note once per conversation, not on every fallback turn.
       setMessages((m) => (
         m.some((x) => x.text === t('llm.fallback')) ? m : [...m, { role: 'coach', text: t('llm.fallback') }]
       ));
@@ -57,18 +59,14 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
     return () => onProviderFallback(null);
   }, [t]);
 
+  // --- QUERIES (projections over the active journey) -------------------------
   const refresh = useCallback(() => {
     const list = dbRef.current.listActivities().filter((a) => !a.archived);
     setPortfolio(list);
     return list;
   }, []);
 
-  // Write the whole DB to the localStorage cache so a reload survives.
-  const persist = useCallback(() => {
-    if (dbRef.current) saveDbBytes(dbRef.current.export());
-  }, []);
-
-  // Restore focal/move/started from a portfolio (used on reload + import).
+  // Restore focal/move/started from a portfolio (reload, switch, import).
   const hydrate = useCallback((list) => {
     const best = bestActivity(list);
     setFocalId(best?.id ?? null);
@@ -77,58 +75,144 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
     setMove(best ? decideMove(list, best.id) : null);
   }, []);
 
+  // --- COMMANDS: persistence ------------------------------------------------
+  // Fire-and-forget save of the active journey blob to its session row.
+  const persist = useCallback(() => {
+    if (dbRef.current && activeIdRef.current) {
+      putSession({ id: activeIdRef.current, bytes: dbRef.current.export() });
+    }
+  }, []);
+
+  // Load a journey blob into the active slot and reset the conversation view.
+  // No persist, no session-row write — callers own that ordering (so deleting the
+  // active session can switch away WITHOUT re-saving the row we just removed).
+  const activate = useCallback(async (id, bytes) => {
+    dbRef.current = await initBrowserDb(bytes || undefined);
+    activeIdRef.current = id;
+    setActiveSessionId(id);
+    setMessages([]);
+    setSim(null);
+    setError(null);
+    setDraft('');
+    hydrate(refresh());
+  }, [refresh, hydrate]);
+
+  // Init: migrate the legacy single journey (+ its config) into the library once,
+  // ensure an active session exists, then load it. Runs once on mount.
   useEffect(() => {
     (async () => {
       try {
-        const cached = loadDbBytes();
-        dbRef.current = await initBrowserDb(cached || undefined);
-        setConfig(dbRef.current.getConfig() || DEFAULT_CONFIG);
-        hydrate(refresh());
+        const legacy = loadDbBytes();
+        if (legacy) {
+          const migratedId = await migrateLegacy(legacy, t('session.default'));
+          if (migratedId) {
+            const tmp = await initBrowserDb(legacy);
+            const legacyCfg = tmp.getConfig();
+            if (legacyCfg && !loadGlobalConfig()) saveGlobalConfig(legacyCfg);
+            clearDbBytes();
+          }
+        }
+        let activeId = await idbGetActiveId();
+        if (!activeId) {
+          const fresh = await initBrowserDb();
+          activeId = await putSession({ name: t('session.default'), bytes: fresh.export() });
+          await idbSetActive(activeId);
+        }
+        await activate(activeId, await idbGetBytes(activeId));
+        setSessions(await idbList());
+        setConfig(loadGlobalConfig() || DEFAULT_CONFIG);
         setReady(true);
       } catch (e) {
         setInitError(e?.message || String(e));
       }
     })();
-  }, [refresh, hydrate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once init
+  }, []);
 
+  // --- COMMANDS: config (global, not per-session) ---------------------------
   const saveConfig = useCallback((cfg) => {
-    dbRef.current.setConfig(cfg);
+    saveGlobalConfig(cfg);
     setConfig(cfg);
-    persist();
-  }, [persist]);
+  }, []);
 
+  // --- COMMANDS: session library --------------------------------------------
+  const refreshSessions = useCallback(async () => setSessions(await idbList()), []);
+
+  const newSession = useCallback(async (name) => {
+    persist();
+    const fresh = await initBrowserDb();
+    const id = await putSession({ name: name || t('session.new'), bytes: fresh.export() });
+    await idbSetActive(id);
+    await activate(id, fresh.export());
+    await refreshSessions();
+  }, [persist, activate, refreshSessions, t]);
+
+  const switchSession = useCallback(async (id) => {
+    if (id === activeIdRef.current) return;
+    persist();
+    await idbSetActive(id);
+    await activate(id, await idbGetBytes(id));
+    await refreshSessions();
+  }, [persist, activate, refreshSessions]);
+
+  const renameSession = useCallback(async (id, name) => {
+    await idbRename(id, name);
+    await refreshSessions();
+  }, [refreshSessions]);
+
+  const deleteSession = useCallback(async (id) => {
+    await idbDelete(id);
+    if (id === activeIdRef.current) {
+      const rest = await idbList();
+      if (rest.length) {
+        await idbSetActive(rest[0].id);
+        await activate(rest[0].id, await idbGetBytes(rest[0].id)); // no persist of the deleted row
+      } else {
+        const fresh = await initBrowserDb();
+        const nid = await putSession({ name: t('session.new'), bytes: fresh.export() });
+        await idbSetActive(nid);
+        await activate(nid, fresh.export());
+      }
+    }
+    await refreshSessions();
+  }, [activate, refreshSessions, t]);
+
+  // --- COMMANDS: export / restore -------------------------------------------
   const exportDb = useCallback(() => {
-    // Sanitized: the downloaded journey never carries the API key/endpoint.
+    // Sanitized: the downloaded journey never carries config (it's global anyway).
     const blob = new Blob([dbRef.current.exportSanitized()], { type: 'application/octet-stream' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    // Explicit, dated name so exports are recognisable and don't overwrite.
     a.download = `ikigaider-journey-${new Date().toISOString().slice(0, 10)}.sqlite`;
     a.click();
     URL.revokeObjectURL(a.href);
   }, []);
 
-  const importBytes = useCallback(async (bytes, note) => {
-    dbRef.current = await initBrowserDb(new Uint8Array(bytes));
-    setConfig(dbRef.current.getConfig() || DEFAULT_CONFIG);
-    hydrate(refresh());
-    setMessages([{ role: 'coach', text: note || t('coach.imported') }]);
+  // Restore a journey blob AS A NEW SESSION (import file / demo). Config stays
+  // global — an imported journey's config (if any) is ignored.
+  const importBytes = useCallback(async (bytes, { note, name } = {}) => {
     persist();
-  }, [refresh, hydrate, persist]);
+    const fresh = await initBrowserDb(new Uint8Array(bytes));
+    const id = await putSession({ name: name || t('session.imported'), bytes: fresh.export() });
+    await idbSetActive(id);
+    await activate(id, fresh.export());
+    if (note) setMessages([{ role: 'coach', text: note }]);
+    await refreshSessions();
+  }, [persist, activate, refreshSessions, t]);
 
   const importDb = useCallback(async (file) => {
-    await importBytes(await file.arrayBuffer());
-  }, [importBytes]);
+    await importBytes(await file.arrayBuffer(), { note: t('coach.imported'), name: t('session.imported') });
+  }, [importBytes, t]);
 
   const loadDemo = useCallback(async () => {
     const res = await fetch(`${import.meta.env.BASE_URL}demo.sqlite`);
     if (!res.ok) throw new Error('demo.sqlite not found');
-    await importBytes(await res.arrayBuffer(), t('coach.demoNote'));
+    await importBytes(await res.arrayBuffer(), { note: t('coach.demoNote'), name: t('session.demo') });
   }, [importBytes, t]);
 
+  // --- COMMANDS: coaching turn ----------------------------------------------
   const say = (role, text, mv) => setMessages((m) => [...m, { role, text, move: mv }]);
 
-  // Push a coach turn's result (from the pure orchestrator) into React state.
   const applyTurn = useCallback((turn) => {
     setPortfolio(turn.portfolio);
     say('coach', turn.message, turn.executedMove);
@@ -137,84 +221,49 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
     setMove(turn.nextMove);
   }, []);
 
-  // Execute the current move, apply results, decide the next. The product logic
-  // lives in orchestrator.runTurn (shared with the skill); the hook only injects
-  // coach() and writes the returned delta into React state.
   const runTurn = useCallback(async (userText, executeMove, prevFocalId) => {
-    const turn = await orchRunTurn(dbRef.current, coach, {
-      config, userText, executeMove, prevFocalId, locale,
-    });
+    const turn = await orchRunTurn(dbRef.current, coach, { config, userText, executeMove, prevFocalId, locale });
     applyTurn(turn);
   }, [config, locale, applyTurn]);
 
-  // Assess free text into activities and either place the best one (+ first
-  // coach turn) or, if nothing concrete surfaced, ask for more (interview).
   const ingest = useCallback(async (text) => {
     setGlide(false);
     const r = await orchIngest(dbRef.current, { assess, coach }, { config, text, locale });
-    if (r.kind === 'placed') {
-      applyTurn(r.turn);
-    } else {
-      setPortfolio(r.portfolio);
-      say('coach', t('coach.interview'));
-    }
+    if (r.kind === 'placed') applyTurn(r.turn);
+    else { setPortfolio(r.portfolio); say('coach', t('coach.interview')); }
   }, [config, locale, applyTurn, t]);
 
   const start = useCallback(async (text) => {
-    setBusy(true);
-    setError(null);
-    setStarted(true);
-    say('user', text);
-    try {
-      await ingest(text);
-    } catch (e) {
-      setError(`Assessment failed: ${e.message}`);
-    } finally {
-      persist();
-      setBusy(false);
-    }
+    setBusy(true); setError(null); setStarted(true); say('user', text);
+    try { await ingest(text); }
+    catch (e) { setError(`Assessment failed: ${e.message}`); }
+    finally { persist(); setBusy(false); }
   }, [ingest, persist]);
 
   const send = useCallback(async (text) => {
-    setBusy(true);
-    setError(null);
-    say('user', text);
+    setBusy(true); setError(null); say('user', text);
     try {
-      // If we have a placed activity, run a coach turn; otherwise keep interviewing.
       if (move) await runTurn(text, move, focalId);
       else await ingest(text);
-    } catch (e) {
-      setError(`Coach failed: ${e.message}`);
-    } finally {
-      persist();
-      setBusy(false);
-    }
+    } catch (e) { setError(`Coach failed: ${e.message}`); }
+    finally { persist(); setBusy(false); }
   }, [move, focalId, runTurn, ingest, persist]);
 
-  // Viz-as-input: a map CLICK seeds the composer (the one true input) with a
-  // complete, natural sentence the user can send or edit — no dangling lead-in.
-  const placeFromMap = useCallback((scores) => {
-    setDraft(placementDraft(scores, t));
-  }, [t]);
-
-  // Simulation: dragging the dot (or picking a past state) sets a what-if target.
-  // It stays on drop (this is the fix for "drop does nothing"). Committing it
-  // ("coach toward this") hands the sentence to the chat — the real input.
+  // --- viz-as-input + simulation --------------------------------------------
+  const placeFromMap = useCallback((scores) => setDraft(placementDraft(scores, t)), [t]);
   const simulate = useCallback((scores) => setSim({ scores }), []);
   const clearSim = useCallback(() => setSim(null), []);
   const pickHistory = useCallback((scores) => setSim({ scores }), []);
-  const coachToward = useCallback((scores) => {
-    setDraft(placementDraft(scores, t));
-    setSim(null);
-  }, [t]);
+  const coachToward = useCallback((scores) => { setDraft(placementDraft(scores, t)); setSim(null); }, [t]);
 
   const focal = portfolio.find((a) => a.id === focalId) || null;
-  const trajectory = focalId ? dbRef.current?.scoresFor(focalId).map((t) => t.scores) || [] : [];
+  const trajectory = focalId ? dbRef.current?.scoresFor(focalId).map((s) => s.scores) || [] : [];
   const focalUncertainty = focal ? uncertainty(focal) : 0;
 
   return {
     ready, initError, error, config, portfolio, focal, focalId, move, messages, busy, glide, started,
     trajectory, focalUncertainty, draft, setDraft, sim, llmProgress,
+    sessions, activeSessionId, newSession, switchSession, renameSession, deleteSession,
     saveConfig, exportDb, importDb, loadDemo, start, send, placeFromMap,
     simulate, clearSim, pickHistory, coachToward,
   };

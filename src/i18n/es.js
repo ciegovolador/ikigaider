@@ -103,6 +103,20 @@ export default {
   'config.journey.note': 'Exporta cuando quieras, vuelve a conectar el archivo en cualquier equipo.',
   'config.language': 'Idioma',
 
+  // biblioteca de sesiones
+  'session.title': 'Sesiones',
+  'session.default': 'Mi recorrido',
+  'session.new': 'Nueva sesión',
+  'session.imported': 'Recorrido importado',
+  'session.demo': 'Demo',
+  'session.untitled': 'Sin título',
+  'session.active': 'activa',
+  'session.new.btn': 'Nueva',
+  'session.rename': 'Renombrar',
+  'session.delete': 'Eliminar',
+  'session.delete.confirm': '¿Eliminar "{name}"? No se puede deshacer en este dispositivo — expórtala primero si quieres conservarla.',
+  'session.note': 'Cada sesión es un recorrido aparte en este dispositivo. Cambia cuando quieras; exporta para conservar o mover una.',
+
   // puertas de origen del modelo (un motor, tres puertas; Claude Code ya disponible)
   'config.doors': 'Otras formas de usar ikigaider',
   'config.doors.soon': 'pronto',

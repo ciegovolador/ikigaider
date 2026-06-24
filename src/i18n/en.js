@@ -115,6 +115,20 @@ export default {
   'config.journey.note': 'Export anytime, plug the file back in on any machine.',
   'config.language': 'Language',
 
+  // session library
+  'session.title': 'Sessions',
+  'session.default': 'My journey',
+  'session.new': 'New session',
+  'session.imported': 'Imported journey',
+  'session.demo': 'Demo',
+  'session.untitled': 'Untitled',
+  'session.active': 'active',
+  'session.new.btn': 'New',
+  'session.rename': 'Rename',
+  'session.delete': 'Delete',
+  'session.delete.confirm': 'Delete "{name}"? This can\'t be undone on this device — export it first if you want to keep it.',
+  'session.note': 'Each session is a separate journey on this device. Switch anytime; export to keep or move one.',
+
   // model-source front doors (one engine, three doors; Claude Code ships now)
   'config.doors': 'Other ways to run ikigaider',
   'config.doors.soon': 'soon',

@@ -1,17 +1,14 @@
-// persist.js — same-machine auto-cache of the SQLite bytes in localStorage so
-// a page reload doesn't wipe config/journey. The exported .sqlite file remains
-// the portable, cross-machine source of truth; this is just reload survival.
+// persist.js — legacy single-journey cache + the GLOBAL (device-level) config.
+//
+// History: v1 cached one journey in localStorage['ikigaider.db']. The session
+// library (sessions.js, IndexedDB) now owns journeys, so this module keeps only:
+//   • loadDbBytes/clearDbBytes — read + retire the legacy key, for one-time
+//     migration into the library (don't-break-userspace).
+//   • load/saveGlobalConfig — the LLM endpoint/key/model live OUTSIDE any journey
+//     (switching sessions must not change your setup; exports are already config-free).
 
-const KEY = 'ikigaider.db';
-
-function toB64(bytes) {
-  let s = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    s += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-  }
-  return btoa(s);
-}
+const KEY = 'ikigaider.db';          // legacy single-journey blob (migrated away)
+const CONFIG_KEY = 'ikigaider.config'; // device-level LLM config (global)
 
 function fromB64(b64) {
   const s = atob(b64);
@@ -20,13 +17,24 @@ function fromB64(b64) {
   return bytes;
 }
 
-export function saveDbBytes(bytes) {
-  try { localStorage.setItem(KEY, toB64(bytes)); } catch { /* quota / private mode */ }
-}
-
+// --- legacy journey (read-only + retire) -----------------------------------
 export function loadDbBytes() {
   try {
     const b = localStorage.getItem(KEY);
     return b ? fromB64(b) : null;
   } catch { return null; }
+}
+export function clearDbBytes() {
+  try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+}
+
+// --- global config ---------------------------------------------------------
+export function loadGlobalConfig() {
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+export function saveGlobalConfig({ base_url = '', api_key = '', model = '' } = {}) {
+  try { localStorage.setItem(CONFIG_KEY, JSON.stringify({ base_url, api_key, model })); } catch { /* quota */ }
 }
