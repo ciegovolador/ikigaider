@@ -80,11 +80,18 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   }, []);
 
   // --- COMMANDS: persistence ------------------------------------------------
-  // Fire-and-forget save of the active journey blob to its session row.
+  // Save the active journey blob to its session row. Captures id + bytes
+  // SYNCHRONOUSLY (so a later switch/delete can't change what we're saving), and
+  // exposes the in-flight promise via persistRef. Session commands DRAIN that
+  // promise before mutating the library — otherwise a just-finished turn's save
+  // (putSession does a read-then-write) can race a delete and resurrect the row.
+  const persistRef = useRef(Promise.resolve());
   const persist = useCallback(() => {
-    if (dbRef.current && activeIdRef.current) {
-      putSession({ id: activeIdRef.current, bytes: dbRef.current.export() });
-    }
+    const id = activeIdRef.current;
+    const bytes = dbRef.current?.export();
+    if (!id || !bytes) return Promise.resolve();
+    persistRef.current = putSession({ id, bytes }).catch(() => {});
+    return persistRef.current;
   }, []);
 
   // Load a journey blob into the active slot and reset the conversation view.
@@ -152,7 +159,7 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   const refreshSessions = useCallback(async () => setSessions(await idbList()), []);
 
   const newSession = useCallback(async (name) => {
-    persist();
+    await persist();
     const fresh = await initBrowserDb();
     const id = await putSession({ name: name || t('session.new'), bytes: fresh.export() });
     await idbSetActive(id);
@@ -162,7 +169,7 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
 
   const switchSession = useCallback(async (id) => {
     if (id === activeIdRef.current) return;
-    persist();
+    await persist(); // finish saving the current session before loading another
     await idbSetActive(id);
     await activate(id, await idbGetBytes(id));
     await refreshSessions();
@@ -174,6 +181,7 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   }, [refreshSessions]);
 
   const deleteSession = useCallback(async (id) => {
+    await persistRef.current; // let any in-flight save settle, then delete for good
     await idbDelete(id);
     if (id === activeIdRef.current) {
       const rest = await idbList();
@@ -204,7 +212,7 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   // Restore a journey blob AS A NEW SESSION (import file / demo). Config stays
   // global — an imported journey's config (if any) is ignored.
   const importBytes = useCallback(async (bytes, { note, name } = {}) => {
-    persist();
+    await persist();
     const fresh = await initBrowserDb(new Uint8Array(bytes));
     const id = await putSession({ name: name || t('session.imported'), bytes: fresh.export() });
     await idbSetActive(id);
