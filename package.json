@@ -10,6 +10,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "build:skill": "node scripts/build-skill.mjs",
+    "reviews:check": "node scripts/check-review-updates.mjs",
+    "eval:judge": "node scripts/eval/judge.mjs",
     "pretest": "node scripts/build-skill.mjs",
     "test": "vitest run"
   },

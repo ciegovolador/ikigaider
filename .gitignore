@@ -34,6 +34,9 @@ coverage/
 .nyc_output/
 *.lcov
 
+# Tier-2 LLM-judge eval output (local, key-gated — see scripts/eval/judge.mjs)
+eval-results/
+
 # Logs
 npm-debug.log*
 yarn-debug.log*
