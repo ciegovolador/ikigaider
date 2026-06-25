@@ -124,6 +124,14 @@ export default {
   'mix.summary': 'Mezclé "{name}" — tendré en cuenta su contexto mientras te oriento.',
   'mix.empty': '"{name}" todavía no tiene nada para mezclar.',
 
+  'review.unknown': 'Aún no hay revisor para "{axis}" — prueba /review paid (o /reality-check) para poner a prueba lo que una actividad realmente paga.',
+  'review.noFocal': 'Coloca una actividad en el mapa primero, luego /review paid para respaldar su puntuación con evidencia.',
+  'review.panel': '{title} convoca a varios revisores. Ejecuta cada uno por turno: {members}',
+  'review.unknownCmd': 'Comando desconocido "{cmd}". Escribe / para ver las opciones.',
+  'coach.copy': 'Copiar',
+  'coach.copied': 'Copiado',
+  'coach.export': 'Exportar',
+
   // puertas de origen del modelo (un motor, tres puertas; Claude Code ya disponible)
   'config.doors': 'Otras formas de usar ikigaider',
   'config.doors.soon': 'pronto',

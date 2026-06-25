@@ -136,6 +136,14 @@ export default {
   'mix.summary': 'Mixed in "{name}" — I\'ll keep its context in mind as we coach.',
   'mix.empty': '"{name}" has nothing to mix in yet.',
 
+  'review.unknown': 'No reviewer for "{axis}" yet — try /review paid (or /reality-check) to pressure-test what an activity actually pays.',
+  'review.noFocal': 'Place an activity on the map first, then /review paid to back its score with evidence.',
+  'review.panel': '{title} convenes several reviewers. Run each in turn: {members}',
+  'review.unknownCmd': 'Unknown command "{cmd}". Type / to see what\'s available.',
+  'coach.copy': 'Copy',
+  'coach.copied': 'Copied',
+  'coach.export': 'Export',
+
   // model-source front doors (one engine, three doors; Claude Code ships now)
   'config.doors': 'Other ways to run ikigaider',
   'config.doors.soon': 'soon',

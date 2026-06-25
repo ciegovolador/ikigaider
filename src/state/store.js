@@ -11,9 +11,13 @@ import {
   putSession, setActiveId as idbSetActive, migrateLegacy,
   renameSession as idbRename, deleteSession as idbDelete,
 } from '../db/sessions.js';
-import { decideMove, bestActivity, uncertainty } from '../lib/policy.js';
-import { assess, coach, onProviderFallback } from '../lib/llm.js';
-import { ingest as orchIngest, runTurn as orchRunTurn } from '../lib/orchestrator.js';
+import { decideMove, bestActivity, uncertainty, reviewNudge } from '../lib/policy.js';
+import { assess, coach, review, onProviderFallback } from '../lib/llm.js';
+import { ingest as orchIngest, runTurn as orchRunTurn, runReview as orchRunReview } from '../lib/orchestrator.js';
+import { parseReviewCommand, getReview, getPanel, listCommands } from '../lib/reviews.js';
+
+// The slash-command catalog is static — compute once for the composer dropdown.
+const COMMANDS = listCommands();
 import { summarizeJourney } from '../lib/digest.js';
 import { onLoadProgress, DEFAULT_BROWSER_MODEL, DEFAULT_BROWSER_BASE } from '../lib/webllm.js';
 import { placementDraft } from '../i18n/index.js';
@@ -244,6 +248,9 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
   const applyTurn = useCallback((turn) => {
     setPortfolio(turn.portfolio);
     say('coach', turn.message, turn.executedMove);
+    // Discoverability for /review: if an axis is high-but-unproven, nudge (no auto-run).
+    const nudge = reviewNudge(turn.portfolio);
+    if (nudge) say('coach', nudge);
     setGlide(turn.glide);
     setFocalId(turn.focalId);
     setMove(turn.nextMove);
@@ -295,14 +302,39 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
     finally { persist(); setBusy(false); }
   }, [ingest, persist]);
 
+  // A review is a forcing-questions turn that re-scores ONE axis (source='review').
+  // Same pure orchestrator the skill runs, with llm.js injected as the model.
+  const runReviewTurn = useCallback(async (reviewName) => {
+    const spec = getReview(reviewName);
+    const r = await orchRunReview(dbRef.current, review, { config, focalId, spec, locale });
+    setPortfolio(r.portfolio);
+    say('coach', r.message);
+    setFocalId(r.focalId);
+    setMove(decideMove(r.portfolio, r.focalId));
+  }, [config, focalId, locale]);
+
   const send = useCallback(async (text) => {
+    // "/review <axis>" in the existing composer starts a review (no new view); any
+    // other text routes to the normal coach/assess path (the regression guard).
+    const cmd = parseReviewCommand(text);
     setBusy(true); setError(null); say('user', text);
     try {
-      if (move) await runTurn(text, move, focalId);
+      if (cmd) {
+        if (cmd.panel) {
+          const p = getPanel(cmd.panel);
+          say('coach', t('review.panel', { title: p.title, members: p.members.map((m) => `/${m}`).join('  ') }));
+        } else if (!cmd.reviewName) say('coach', t('review.unknown', { axis: cmd.axis || '?' }));
+        else if (!focalId) say('coach', t('review.noFocal'));
+        else await runReviewTurn(cmd.reviewName);
+      } else if (text.trim().startsWith('/')) {
+        // An unrecognized slash command must NOT silently become a coach turn (that
+        // produced the "/mentor -> Congratulations" hallucination). Surface it.
+        say('coach', t('review.unknownCmd', { cmd: text.trim().split(/\s+/)[0] }));
+      } else if (move) await runTurn(text, move, focalId);
       else await ingest(text);
     } catch (e) { setError(`Coach failed: ${e.message}`); }
     finally { persist(); setBusy(false); }
-  }, [move, focalId, runTurn, ingest, persist]);
+  }, [move, focalId, runTurn, ingest, persist, runReviewTurn, t]);
 
   // --- viz-as-input + simulation --------------------------------------------
   const placeFromMap = useCallback((scores) => setDraft(placementDraft(scores, t)), [t]);
@@ -317,7 +349,7 @@ export function useIkigaider({ t = (k) => k, locale = 'en' } = {}) {
 
   return {
     ready, initError, error, config, portfolio, focal, focalId, move, messages, busy, glide, started,
-    trajectory, focalUncertainty, draft, setDraft, sim, llmProgress,
+    trajectory, focalUncertainty, draft, setDraft, sim, llmProgress, commands: COMMANDS,
     sessions, activeSessionId, newSession, switchSession, renameSession, deleteSession, mixInto,
     saveConfig, exportDb, importDb, loadDemo, start, send, placeFromMap,
     simulate, clearSim, pickHistory, coachToward,

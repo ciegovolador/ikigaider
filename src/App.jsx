@@ -68,6 +68,7 @@ export default function App() {
           llmReady={llmReady}
           move={ik.move}
           llmProgress={ik.llmProgress}
+          commands={ik.commands}
           t={t}
         />
       </div>
