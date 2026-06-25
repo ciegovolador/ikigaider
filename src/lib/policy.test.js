@@ -1,11 +1,29 @@
 import { describe, it, expect } from 'vitest';
-import { decideMove, ucb, uncertainty, bestActivity } from './policy.js';
+import { decideMove, ucb, uncertainty, bestActivity, reviewNudge } from './policy.js';
 import { makeScores } from './ikigai.js';
 
 const act = (id, name, scores, conf) => ({
   id, name, scores: makeScores(scores),
   conf: conf || { love: 0.9, good: 0.9, world: 0.9, paid: 0.9 },
   archived: false,
+});
+
+describe('reviewNudge', () => {
+  it('nudges when paid is high but low-confidence', () => {
+    const p = [act('a', 'synth', { love: 0.9, good: 0.7, world: 0.3, paid: 0.8 }, { love: 0.9, good: 0.9, world: 0.9, paid: 0.3 })];
+    expect(reviewNudge(p)).toMatch(/\/review paid/);
+  });
+  it('no nudge when paid is high AND confident', () => {
+    const p = [act('a', 'synth', { paid: 0.8 }, { love: 0.9, good: 0.9, world: 0.9, paid: 0.9 })];
+    expect(reviewNudge(p)).toBeNull();
+  });
+  it('no nudge when paid is low', () => {
+    const p = [act('a', 'synth', { paid: 0.2 }, { love: 0.2, good: 0.2, world: 0.2, paid: 0.2 })];
+    expect(reviewNudge(p)).toBeNull();
+  });
+  it('no nudge on an empty portfolio', () => {
+    expect(reviewNudge([])).toBeNull();
+  });
 });
 
 describe('uncertainty / ucb', () => {

@@ -18,7 +18,22 @@ createServer((req, res) => {
   req.on('end', () => {
     const sys = (() => { try { return JSON.parse(body).messages?.[0]?.content || ''; } catch { return ''; } })();
     let out;
-    if (sys.includes('Decided move:')) {
+    if (sys.includes('you may ONLY change')) {
+      // A REVIEW turn: re-score the reviewed axis only. Parse the axis + the
+      // current scores out of the prompt and simulate "evidence didn't hold up"
+      // by halving the reviewed axis (others carried forward).
+      const axis = (sys.match(/\((love|good|world|paid)\)/) || [])[1] || 'paid';
+      const cur = {};
+      for (const a of ['love', 'good', 'world', 'paid']) {
+        const m = sys.match(new RegExp(`${a}\\s+([0-9.]+)`));
+        cur[a] = m ? Number(m[1]) : 0.5;
+      }
+      out = reply({
+        message: `No concrete evidence for ${axis} — only intentions. Lowering it.`,
+        scores: { ...cur, [axis]: Math.round(cur[axis] * 50) / 100 },
+        conf: { love: 0.8, good: 0.8, world: 0.8, paid: 0.8 },
+      });
+    } else if (sys.includes('Decided move:')) {
       out = reply({
         message: 'Your music tools sit in Passion — you love them and you\'re decent. The weakest axis is pay. Try charging for one tool this month.',
         updates: [{ name: 'music tools', scores: { love: 0.9, good: 0.6, world: 0.5, paid: 0.45 }, conf: { love: 0.9, good: 0.7, world: 0.6, paid: 0.6 } }],

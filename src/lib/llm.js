@@ -12,6 +12,7 @@ import {
   parseModelJson,
   extractJson,
 } from './prompts.js';
+import { buildReviewMessages } from './reviews.js';
 
 // Re-export so existing importers (and llm.test.js) keep resolving extractJson here.
 export { extractJson };
@@ -135,6 +136,17 @@ export async function assess(config, description) {
 // `locale` localizes the coaching prose only — the JSON contract stays English.
 export async function coach(config, { move, focal, portfolio, userText, locale, context }) {
   const { messages, schema } = buildCoachMessages({ move, focal, portfolio, userText, locale, context });
+  const out = await chatOrFallback(config, messages, schema);
+  return parseModelJson(out);
+}
+
+// review: run a forcing-questions review turn for one axis. Same transport as
+// coach; only the prompt builder differs (the model is told to back the axis with
+// evidence). Returns parsed { message, scores, conf }; orchestrator.runReview then
+// re-scores only the reviewed axis. Used by the web door (the skill injects the
+// agent's JSON directly).
+export async function review(config, { spec, focal, userText, locale }) {
+  const { messages, schema } = buildReviewMessages({ spec, focal, userText, locale });
   const out = await chatOrFallback(config, messages, schema);
   return parseModelJson(out);
 }

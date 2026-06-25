@@ -29,6 +29,15 @@ export const ENGINE_FILES = [
   ['src/lib/policy.js', 'policy.mjs'],
   ['src/lib/assessments.js', 'assessments.mjs'],
   ['src/lib/prompts.js', 'prompts.mjs'],
+  ['src/lib/reviews.js', 'reviews.mjs'],
+  // The review board: one file per discipline (flattened into engine/). Adding a
+  // reviewer = a new file here; the import-suffix transform + parity test cover it.
+  ['src/lib/reviews/_define.js', '_define.mjs'],
+  ['src/lib/reviews/reality-check.js', 'reality-check.mjs'],
+  ['src/lib/reviews/plan-economist-review.js', 'plan-economist-review.mjs'],
+  ['src/lib/reviews/plan-craftsman-review.js', 'plan-craftsman-review.mjs'],
+  ['src/lib/reviews/plan-psychologist-review.js', 'plan-psychologist-review.mjs'],
+  ['src/lib/reviews/plan-anthropologist-review.js', 'plan-anthropologist-review.mjs'],
   ['src/lib/orchestrator.js', 'orchestrator.mjs'],
   ['src/db/sqlite.js', 'sqlite.mjs'],
 ];

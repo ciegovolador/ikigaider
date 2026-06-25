@@ -17,11 +17,12 @@
 import { openDb, writeDb, DEFAULT_DB } from './db.mjs';
 import { ikigaiScore, bottleneckAxis, classify } from './engine/ikigai.mjs';
 import { decideMove, bestActivity } from './engine/policy.mjs';
-import { applyPayload, runTurn } from './engine/orchestrator.mjs';
+import { applyPayload, runTurn, runReview } from './engine/orchestrator.mjs';
 import {
   buildAssessMessages, buildCoachMessages, validatePayload,
   ASSESS_SCHEMA, COACH_SCHEMA,
 } from './engine/prompts.mjs';
+import { buildReviewMessages, getReview, REVIEW_SCHEMA } from './engine/reviews.mjs';
 
 // --- tiny arg/io helpers ---------------------------------------------------
 function parseArgs(argv) {
@@ -147,6 +148,38 @@ async function cmdAppendMove(db, { focal, userText, locale }) {
   ok({ db, message: turn.message, focalId: turn.focalId, glide: turn.glide, createdIds: turn.createdIds, nextMove: turn.nextMove, portfolio: turn.portfolio });
 }
 
+// prompt-review: emit the forcing-questions messages for the agent (mirror of
+// prompt-coach). The agent answers with REVIEW_SCHEMA JSON; append-review applies it.
+async function cmdPromptReview(db, { focal, review }) {
+  if (!review || review === true) fail('prompt-review needs --review <name> (e.g. reality-check)');
+  const spec = getReview(review);
+  if (!spec) fail(`unknown review "${review}". Try: reality-check`);
+  const store = await openDb(db);
+  const portfolio = shapePortfolio(store);
+  if (!portfolio.length) fail('prompt-review needs a non-empty portfolio — assess an activity first');
+  const focalId = resolveFocal(portfolio, focal);
+  const focalAct = store.listActivities().find((a) => a.id === focalId);
+  ok({ ...buildReviewMessages({ spec, focal: focalAct, userText: '', locale: 'en' }), review: spec.name, axis: spec.axis, focalId });
+}
+
+// append-review: validate the agent's review JSON, re-score ONLY the reviewed axis
+// (carry-forward enforced in runReview), persist with source='review'. Same
+// retry-once-then-write-nothing contract as append-move.
+async function cmdAppendReview(db, { focal, review, locale }) {
+  const spec = getReview(review === true ? '' : review);
+  if (!spec) fail('append-review needs --review <name> (e.g. reality-check)');
+  const payload = parseStdinJson(await readStdin());
+  validateOrFail(payload, REVIEW_SCHEMA, 'review');
+  const store = await openDb(db);
+  const portfolio = shapePortfolio(store);
+  if (!portfolio.length) fail('append-review needs a non-empty portfolio');
+  const focalId = resolveFocal(portfolio, focal);
+  const reviewer = async () => payload;
+  const r = await runReview(store, reviewer, { config: {}, focalId, spec, locale: locale === true ? 'en' : (locale || 'en') });
+  writeDb(store, db);
+  ok({ db, message: r.message, axis: r.axis, before: r.before, after: r.after, verdict: r.verdict, ...stateView(store, r.focalId) });
+}
+
 async function cmdExport(db, out) {
   const store = await openDb(db);
   const target = out && out !== true ? out : db;
@@ -165,9 +198,11 @@ async function main() {
     case 'append-assessment': return cmdAppendAssessment(db);
     case 'prompt-coach': return cmdPromptCoach(db, { focal: flags.focal, userText: flags['user-text'], locale: flags.locale });
     case 'append-move': return cmdAppendMove(db, { focal: flags.focal, userText: flags['user-text'], locale: flags.locale });
+    case 'prompt-review': return cmdPromptReview(db, { focal: flags.focal, review: flags.review });
+    case 'append-review': return cmdAppendReview(db, { focal: flags.focal, review: flags.review, locale: flags.locale });
     case 'export': return cmdExport(db, flags.out);
     default:
-      return fail(`Unknown command "${cmd ?? ''}". Use: init | state | prompt-assess | append-assessment | prompt-coach | append-move | export`);
+      return fail(`Unknown command "${cmd ?? ''}". Use: init | state | prompt-assess | append-assessment | prompt-coach | append-move | prompt-review | append-review | export`);
   }
 }
 

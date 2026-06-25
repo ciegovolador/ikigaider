@@ -24,7 +24,9 @@ ikigai is the product of the four axes; the centre needs all four high.`;
 
 // --- JSON schemas for structured output -----------------------------------
 // Strict mode requires every property in `required`, so shapes stay minimal.
-const scoreSchema = {
+// Exported so reviews.js can reuse the exact axis-score shape (DRY — the review
+// schema must not redefine what an axis-score object looks like).
+export const scoreSchema = {
   type: 'object',
   properties: Object.fromEntries(AXES.map((a) => [a, { type: 'number' }])),
   required: [...AXES],

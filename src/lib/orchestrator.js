@@ -12,7 +12,7 @@
 //   runTurn(store, coach, args)             -> { message, focalId, nextMove, ... }
 //   ingest(store, {assess, coach}, args)    -> { kind:'placed', turn } | { kind:'interview', portfolio }
 
-import { makeScores } from './ikigai.js';
+import { makeScores, clamp01 } from './ikigai.js';
 import { decideMove, bestActivity } from './policy.js';
 
 const active = (store) => store.listActivities().filter((a) => !a.archived);
@@ -70,6 +70,34 @@ export async function runTurn(store, coach, { config, userText, executeMove, pre
     glide: newFocal === prevFocalId,
     portfolio: list,
   };
+}
+
+// Run a single-axis review via the injected reviewer(). Re-scores ONLY the
+// reviewed axis from the model's estimate, carrying the other three FORWARD from
+// the activity's current scores — enforced here, never trusted to the model
+// (the carry-forward correctness path). Writes the new row with source='review'
+// so review-driven scores are distinguishable with no schema change. Pure:
+// returns the verdict delta for the caller to render / persist as conversation.
+export async function runReview(store, reviewer, { config, focalId, spec, userText, locale }) {
+  const focal = active(store).find((a) => a.id === focalId);
+  if (!focal) throw new Error('review needs an existing activity — assess one first');
+  const axis = spec.axis;
+  const payload = await reviewer(config, { spec, focal, userText, locale });
+
+  const before = focal.scores[axis];
+  const proposed = payload?.scores?.[axis];
+  // Override ONLY the reviewed axis, and only if the model returned a finite
+  // number for it; the other three are carried forward untouched.
+  const after = Number.isFinite(proposed) ? clamp01(proposed) : before;
+  const merged = { ...focal.scores, [axis]: after };
+  const conf = {
+    ...(focal.conf || {}),
+    [axis]: Number.isFinite(payload?.conf?.[axis]) ? clamp01(payload.conf[axis]) : (focal.conf?.[axis] ?? 0.5),
+  };
+  store.addScore(focalId, makeScores(merged), conf, 'review');
+
+  const verdict = after < before - 0.01 ? 'downgrade' : after > before + 0.01 ? 'upgrade' : 'unchanged';
+  return { message: payload?.message || '(no verdict)', axis, before, after, verdict, focalId, portfolio: active(store) };
 }
 
 // Assess free text into activities, then either place the best one (running a

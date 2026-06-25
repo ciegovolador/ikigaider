@@ -137,6 +137,42 @@ describe('cli.mjs — turn loop + validate-or-write-nothing', () => {
     expect(r.nextMove).toBeTruthy();
   });
 
+  it('prompt-review emits the reality-check messages + schema', () => {
+    const p = tmpDb(); cleanup.push(p);
+    run(['init', '--db', p]);
+    const seeded = run(['append-assessment', '--db', p],
+      JSON.stringify({ activities: [act('synth', { paid: 0.8 })] }));
+    const r = run(['prompt-review', '--db', p, '--review', 'reality-check', '--focal', seeded.focalId]);
+    expect(r.schema.name).toBe('ikigai_review');
+    expect(r.axis).toBe('paid');
+    expect(r.messages[0].content).toContain('synth');
+  });
+
+  it('append-review re-scores ONLY paid (carry-forward) and reports the verdict', () => {
+    const p = tmpDb(); cleanup.push(p);
+    run(['init', '--db', p]);
+    const seeded = run(['append-assessment', '--db', p],
+      JSON.stringify({ activities: [act('synth', { love: 0.9, good: 0.7, world: 0.3, paid: 0.8 })] }));
+    const r = run(['append-review', '--db', p, '--review', 'reality-check', '--focal', seeded.focalId],
+      JSON.stringify({ message: 'no receipts', scores: { love: 0.1, good: 0.1, world: 0.1, paid: 0.3 }, conf: SC({ paid: 0.9 }) }));
+    expect(r.verdict).toBe('downgrade');
+    expect(r.after).toBeCloseTo(0.3);
+    const focalAct = r.portfolio.find((a) => a.id === r.focalId);
+    expect(focalAct.scores.paid).toBeCloseTo(0.3);
+    expect(focalAct.scores.love).toBeCloseTo(0.9); // carried forward, not 0.1
+  });
+
+  it('schema-invalid review writes NOTHING and asks for one retry', () => {
+    const p = tmpDb(); cleanup.push(p);
+    run(['init', '--db', p]);
+    const seeded = run(['append-assessment', '--db', p],
+      JSON.stringify({ activities: [act('synth', { paid: 0.8 })] }));
+    const err = runFail(['append-review', '--db', p, '--review', 'reality-check', '--focal', seeded.focalId],
+      JSON.stringify({ message: 'x', scores: { paid: 0.3 } })); // missing conf + axes
+    expect(err.retry).toBe(true);
+    expect(run(['state', '--db', p]).portfolio[0].scores.paid).toBeCloseTo(0.8); // unchanged
+  });
+
   it('export writes a sanitized handoff file and points at the web', () => {
     const p = tmpDb(); cleanup.push(p);
     run(['init', '--db', p]);

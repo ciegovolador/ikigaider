@@ -96,6 +96,22 @@ export function decideMove(portfolio, focalId, opts = {}) {
   });
 }
 
+// reviewNudge: discoverability for the explicit /review command without a button
+// or an auto-trigger. When the leading activity scores an axis HIGH but the person
+// isn't confident in it, suggest backing it with evidence. Pure; returns a nudge
+// string or null. PoC: only the paid axis (the only review that exists yet).
+export function reviewNudge(portfolio, opts = {}) {
+  const o = { highScore: 0.6, lowConf: 0.6, axis: 'paid', ...opts };
+  const best = bestActivity(portfolio);
+  if (!best) return null;
+  const score = best.scores?.[o.axis] ?? 0;
+  const conf = best.conf?.[o.axis] ?? 1;
+  if (score >= o.highScore && conf <= o.lowConf) {
+    return `Your "${AXIS_LABEL[o.axis]}" score for "${best.name}" is high but unproven — type /review ${o.axis} to back it with evidence.`;
+  }
+  return null;
+}
+
 function move(mode, submode, focusId, focalId, extra) {
   const teleport = mode === 'explore' || (focusId != null && focusId !== focalId);
   return { mode, submode, focusId, teleport, axis: null, ...extra };

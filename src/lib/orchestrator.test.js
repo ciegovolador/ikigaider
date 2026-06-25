@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { createRequire } from 'node:module';
 import initSqlJs from 'sql.js';
 import { createDb } from '../db/sqlite.js';
-import { applyPayload, runTurn, ingest } from './orchestrator.js';
+import { applyPayload, runTurn, ingest, runReview } from './orchestrator.js';
 
 const require = createRequire(import.meta.url);
 let SQL;
@@ -72,6 +72,53 @@ describe('runTurn', () => {
       config: {}, userText: '', executeMove: { mode: 'exploit', submode: 'keep', focusId: focalId, rationale: 'r' }, prevFocalId: focalId, locale: 'en',
     });
     expect(turn.message).toBe('(no message)');
+  });
+});
+
+describe('runReview — single-axis re-score, carry-forward, source=review', () => {
+  const SC4 = (p = {}) => ({ love: 0.9, good: 0.7, world: 0.3, paid: 0.8, ...p });
+  const spec = { axis: 'paid', name: 'reality-check' };
+  const seed = () => {
+    const store = createDb(SQL);
+    applyPayload(store, { activities: [{ name: 'synth', scores: SC4(), conf: SC() }] });
+    return { store, focalId: store.listActivities()[0].id };
+  };
+
+  it('downgrades ONLY the reviewed axis; carries the other three forward; tags source=review', async () => {
+    const { store, focalId } = seed();
+    // The model tries to slash every axis; runReview must change ONLY paid.
+    const reviewer = caller({ message: 'no receipts', scores: { love: 0.1, good: 0.1, world: 0.1, paid: 0.3 }, conf: SC({ paid: 0.9 }) });
+    const r = await runReview(store, reviewer, { config: {}, focalId, spec, locale: 'en' });
+    expect(r.verdict).toBe('downgrade');
+    expect(r.before).toBeCloseTo(0.8);
+    expect(r.after).toBeCloseTo(0.3);
+    const latest = store.listActivities()[0].scores;
+    expect(latest.paid).toBeCloseTo(0.3); // reviewed axis moved
+    expect(latest.love).toBeCloseTo(0.9); // carried forward, NOT 0.1
+    expect(latest.good).toBeCloseTo(0.7);
+    expect(latest.world).toBeCloseTo(0.3);
+    const reviewRows = store.db.exec("SELECT COUNT(*) FROM scores WHERE source = 'review'")[0].values[0][0];
+    expect(reviewRows).toBe(1);
+  });
+
+  it('omitted axis number leaves the score unchanged (no zeroing)', async () => {
+    const { store, focalId } = seed();
+    const r = await runReview(store, caller({ message: 'meh', scores: { love: 0.9, good: 0.7, world: 0.3 }, conf: {} }), { config: {}, focalId, spec, locale: 'en' });
+    expect(r.after).toBeCloseTo(0.8); // paid carried forward, not 0
+    expect(store.listActivities()[0].scores.paid).toBeCloseTo(0.8);
+  });
+
+  it('reports unchanged when the axis holds, and defaults a missing message', async () => {
+    const { store, focalId } = seed();
+    const r = await runReview(store, caller({ scores: SC4(), conf: SC() }), { config: {}, focalId, spec, locale: 'en' });
+    expect(r.verdict).toBe('unchanged');
+    expect(r.message).toBe('(no verdict)');
+  });
+
+  it('throws a clear error when the focal activity does not exist', async () => {
+    const { store } = seed();
+    await expect(runReview(store, caller({}), { config: {}, focalId: 'nope', spec, locale: 'en' }))
+      .rejects.toThrow(/existing activity/);
   });
 });
 

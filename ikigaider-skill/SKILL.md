@@ -56,7 +56,42 @@ echo '<your coach JSON>' | node cli.mjs append-move --focal <focalId> --user-tex
 It prints the coaching `message`, the new `focalId`, and the `nextMove`. Loop step 3
 for each subsequent turn, threading the returned `focalId` forward.
 
-**4. Visualize**
+**4. Reviews — your multidisciplinary board (make a score earn itself with evidence)**
+A *review* is a forcing-questions turn that re-scores ONE axis only, from evidence the
+person gives — anti-self-delusion, not coaching. The board (forks gstack's review skills):
+
+| review | axis | mirrors gstack |
+|---|---|---|
+| `reality-check` | paid | `qa` (quick gut check) |
+| `plan-economist-review` | paid | `plan-eng-review` (runway/income) |
+| `plan-craftsman-review` | good | `plan-eng-review` (shipped evidence) |
+| `plan-psychologist-review` | love | `plan-design-review` (love vs "should") |
+| `plan-anthropologist-review` | world | `plan-devex-review` (who actually asked) |
+
+Panels (a chair that convenes specialists — run each member in sequence):
+`plan-strategist-review` (`plan-ceo-review`), `plan-mentor-review` (`mentor-review`),
+`panel` (`autoplan`, the full board). Run `node cli.mjs ... ` per member, threading the focal.
+
+```
+node cli.mjs prompt-review --focal <focalId> --review <name>
+```
+Prints `{ messages, schema, axis, focalId }`. Produce ONLY JSON matching `schema`
+(`{message, scores, conf}`) as an **isolated call** — judge from the person's evidence in
+THIS exchange alone, do not flatter. Re-estimate all four axes but change ONLY the reviewed
+axis. Pipe it back:
+```
+echo '<your review JSON>' | node cli.mjs append-review --focal <focalId> --review <name>
+```
+It re-scores **only** the reviewed axis (the other three are carried forward in code, never
+trusted to you), writes the new `scores` row tagged `source=review`, and prints the
+`verdict` (downgrade/upgrade/unchanged) + new state. Same one-retry-then-surface contract.
+Web parity: typing `/review <axis>` (e.g. `/review love`) in the chat on ikigaider.com runs
+the axis's specialist; `/review <name>` runs a specific reviewer.
+
+> Maintainer note: each reviewer records the gstack skill + version it forks. Run
+> `npm run reviews:check` to see if gstack has advanced past a mirrored reviewer (free updates).
+
+**5. Visualize**
 ```
 node cli.mjs export
 ```
@@ -79,4 +114,5 @@ person to open ikigaider.com and use **Import journey** to see the map and traje
 ## Commands
 `init` · `state [--focal <id>]` · `prompt-assess --text <s>` · `append-assessment` (stdin) ·
 `prompt-coach --focal <id> [--user-text <s>] [--locale es]` · `append-move --focal <id>` (stdin) ·
+`prompt-review --review <name> [--focal <id>]` · `append-review --review <name> [--focal <id>]` (stdin) ·
 `export [--out <path>]`. All accept `--db <path>` (default `~/.ikigaider/journey.sqlite`).
