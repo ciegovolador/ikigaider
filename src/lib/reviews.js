@@ -133,7 +133,7 @@ ${spec.questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}${langLine}
 
 Return ONLY a JSON object {"message","scores","conf"}. "message" is your verdict in 2-4 sentences. "scores" re-estimates all four axes for "${focal.name}", but you may ONLY change "${axis}" — keep the other three at their current values. "conf" is your confidence 0..1 per axis.
 Current scores for "${focal.name}": ${current}.
-Example of the SHAPE only — write your own values: {"message":"...","scores":{"love":0.5,"good":0.5,"world":0.5,"paid":0.3},"conf":{"love":0.6,"good":0.6,"world":0.6,"paid":0.8}}`;
+Example of the SHAPE only — write your OWN verdict and values, never copy these: {"message":"You named no actual income in the last 90 days, only that it might pay later. That's a hope, not earnings, so paid drops.","scores":{"love":0.5,"good":0.5,"world":0.5,"paid":0.3},"conf":{"love":0.6,"good":0.6,"world":0.6,"paid":0.8}}`;
 
   return {
     messages: [

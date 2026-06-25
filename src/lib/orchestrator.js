@@ -97,7 +97,12 @@ export async function runReview(store, reviewer, { config, focalId, spec, userTe
   store.addScore(focalId, makeScores(merged), conf, 'review');
 
   const verdict = after < before - 0.01 ? 'downgrade' : after > before + 0.01 ? 'upgrade' : 'unchanged';
-  return { message: payload?.message || '(no verdict)', axis, before, after, verdict, focalId, portfolio: active(store) };
+  // Guard a degenerate model reply (empty, or a copied "..." placeholder): always
+  // surface the verdict + numbers so the turn is never a blank/"..." coach bubble.
+  const raw = (payload?.message || '').trim();
+  const hasText = raw.replace(/[\s.·…\-–—→>]/g, '').length > 0;
+  const message = hasText ? raw : `${axis}: ${before.toFixed(2)} → ${after.toFixed(2)} (${verdict})`;
+  return { message, axis, before, after, verdict, focalId, portfolio: active(store) };
 }
 
 // Assess free text into activities, then either place the best one (running a

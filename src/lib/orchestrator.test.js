@@ -108,11 +108,16 @@ describe('runReview — single-axis re-score, carry-forward, source=review', () 
     expect(store.listActivities()[0].scores.paid).toBeCloseTo(0.8);
   });
 
-  it('reports unchanged when the axis holds, and defaults a missing message', async () => {
+  it('synthesizes a verdict line when the model reply has no real message', async () => {
     const { store, focalId } = seed();
-    const r = await runReview(store, caller({ scores: SC4(), conf: SC() }), { config: {}, focalId, spec, locale: 'en' });
-    expect(r.verdict).toBe('unchanged');
-    expect(r.message).toBe('(no verdict)');
+    // empty message AND a "..."-only message must both fall back to the numbers.
+    for (const bad of [{ scores: SC4(), conf: SC() }, { message: '...', scores: SC4(), conf: SC() }]) {
+      const r = await runReview(store, caller(bad), { config: {}, focalId, spec, locale: 'en' });
+      expect(r.verdict).toBe('unchanged');
+      expect(r.message).toContain('paid');
+      expect(r.message).toContain('unchanged');
+      expect(r.message).not.toBe('...');
+    }
   });
 
   it('throws a clear error when the focal activity does not exist', async () => {
